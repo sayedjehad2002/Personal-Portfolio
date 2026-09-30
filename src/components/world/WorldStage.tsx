@@ -55,6 +55,7 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
   const cabinBack = useRef<HTMLDivElement>(null);
   const cabinFront = useRef<HTMLDivElement>(null);
   const altitude = useRef<HTMLDivElement>(null);
+  const warmEl = useRef<HTMLDivElement>(null);
   const hintEl = useRef<HTMLDivElement>(null);
   const droneEl = useRef<HTMLDivElement>(null);
   const flockEl = useRef<HTMLDivElement>(null);
@@ -62,6 +63,8 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
   const hero = useRef<CharacterHandle>(null);
   /** a jump asked for by ↑ / W / Space or a click on the avatar */
   const jumpReq = useRef(false);
+  /** the camera's left edge in world x (Tab enters the world at the player) */
+  const camXRef = useRef(0);
   const lenis = useLenis();
   const lenisRef = useRef(lenis);
   const onReadyRef = useRef(onReady);
@@ -69,6 +72,8 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
   lenisRef.current = lenis;
 
   const [world, setWorld] = useState<World | null>(null);
+  const W0 = useRef<World | null>(null);
+  W0.current = world;
   const [bubble, setBubble] = useState<{ text: string; side: "left" | "right" } | null>(null);
   const [toast, setToast] = useState<{ level: number; key: number } | null>(null);
   const progressRef = useRef(0);
@@ -185,12 +190,16 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
         return { el, x0: r.left - base - W.vw * 0.25, x1: r.right - base + W.vw * 0.25, on: true };
       });
       let nextCull = 0;
+      let lastAlt = -1;
+      let lastWarm = -1;
+      let focusTravelUntil = 0;
       const cull = (camX: number) => {
         for (const a of ambient) {
           const on = a.x1 > camX && a.x0 < camX + W.vw;
           if (on !== a.on) {
             a.on = on;
-            a.el.style.animationPlayState = on ? "" : "paused";
+            // not just paused: a paused animation still keeps its element on its own compositor layer
+            a.el.style.animationName = on ? "" : "none";
           }
         }
       };
@@ -245,6 +254,11 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
           }
         } else if (cr.kind === "bag") {
           tl.fromTo(cr.el, { rotate: away * 13 }, { rotate: 0, duration: 2.4, ease: "elastic.out(1, 0.22)" });
+        } else if (cr.kind === "oyster") {
+          // the shell swings open and the pearl catches the light
+          tl.to(cr.el.querySelector("[data-lid]"), { rotate: -44, svgOrigin: "14 44", duration: 0.55, ease: "back.out(2.2)" });
+          tl.to(cr.el.querySelector("[data-pearl]"), { opacity: 1, duration: 0.3 }, 0.12);
+          tl.fromTo(cr.el.querySelector("[data-glint]"), { opacity: 0, scale: 0.3, svgOrigin: "60 35" }, { opacity: 1, scale: 1.25, duration: 0.28, yoyo: true, repeat: 1, ease: "power2.out" }, 0.4);
         }
         cr.tl = tl;
       };
@@ -256,6 +270,10 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
         frame(cr.el, "a", false);
         frame(cr.el, "b", false);
         frame(cr.el, "rest", true);
+        if (cr.kind === "oyster") {
+          gsap.set(cr.el.querySelector("[data-lid]"), { rotate: 0, svgOrigin: "14 44" });
+          gsap.set(cr.el.querySelector("[data-pearl]"), { opacity: 0 });
+        }
         cr.gone = false;
       };
 
@@ -277,6 +295,7 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
       let prevSpeed = 0;
       let phase = 0;
       let facing: 1 | -1 = 1;
+      let turnAcc = 0;
       let still = 0.3; // he starts standing (idle), not mid-step
       let lastBubble: string | null | undefined = undefined;
       let bubbleSide: "left" | "right" = "right";
@@ -295,6 +314,14 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
       // camera bump (spring): a dip when stepping onto the frozen Gulf, a jolt on heavy landings
       let shake = 0;
       let shakeV = 0;
+      let lastCamX = Number.NaN;
+      let lastCamY = Number.NaN;
+      let lastShake = Number.NaN;
+      let lastCharY = Number.NaN;
+      let paceF = 0;
+      let heroFade = 1;
+      let lastHeroFade = 1;
+      let running = false;
       let wasIce = false;
       let indoor = false;
       // a flock of flamingos crosses the sky once per ride (again if you ride it again)
@@ -320,22 +347,32 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
 
       const render = (time: number, deltaMs: number) => {
         const dt = Math.max(1 / 240, Math.min(0.05, deltaMs / 1000));
-        const s = window.scrollY - top0;
+        // Lenis' own float position: window.scrollY is whole pixels, so a slow momentum tail would move the
+        // camera (and his legs) in 1px stair steps
+        const Ls = lenisRef.current;
+        const s = (Ls ? Ls.animatedScroll : window.scrollY) - top0;
         const c = camAt(W, s);
         if (prevX < 0) prevX = c.x;
         const dx = c.x - prevX;
         prevX = c.x;
         const speed = dx / dt;
 
-        setWorldX(-c.camX);
         shakeV += (-shake * 190 - shakeV * 13) * dt;
         shake += shakeV * dt;
-        setWorldY(-c.camY + shake);
-        setFrontX?.(-c.camX);
-        setFrontY?.(-c.camY + shake);
-        for (const l of layers) {
-          l.setX(-c.camX * l.f);
-          l.setY(-c.camY * l.f + shake * l.f);
+        if (Math.abs(shake) < 0.02 && Math.abs(shakeV) < 0.05) shake = shakeV = 0; // the bump settles for good
+        // at rest nothing is written, so the compositor has nothing to redo
+        if (c.camX !== lastCamX || c.camY !== lastCamY || shake !== lastShake) {
+          lastCamX = c.camX;
+          lastCamY = c.camY;
+          lastShake = shake;
+          setWorldX(-c.camX);
+          setWorldY(-c.camY + shake);
+          setFrontX?.(-c.camX);
+          setFrontY?.(-c.camY + shake);
+          for (const l of layers) {
+            l.setX(-c.camX * l.f);
+            l.setY(-c.camY * l.f + shake * l.f);
+          }
         }
 
         // ---- player ----
@@ -346,6 +383,7 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
           jumpReq.current = false;
           if (body.onGround && c.phase !== "ride") {
             body.vy = -Math.sqrt(2 * 9 * W.charH * W.charH * 0.62);
+            body.hop = false;
             body.onGround = false;
             body.crouch = 0;
             body.jumpedAt = time;
@@ -372,12 +410,19 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
           stepBody(body, W.solids, x, dx, dt, W.charH, time, c.camY + W.vh * 1.4, remaining);
         }
         const screenY = body.y - c.camY;
-        setCharY(screenY + shake - 260 * W.unit);
+        const charY = screenY + shake - 260 * W.unit;
+        if (charY !== lastCharY) setCharY((lastCharY = charY));
         if (Math.abs(dx) > 0.05) {
           const nf = dx > 0 ? 1 : -1;
-          // reversing at speed kicks up a skid puff
-          if (nf !== facing && Math.abs(prevSpeed) > 350 && body.onGround && c.phase !== "ride") snowControl.puff(W.cx + nf * 16 * W.unit, screenY - 2, -nf);
-          facing = nf;
+          // he only turns round after a few px of real movement the other way (a trackpad swipe that starts
+          // with a little drift, or a wheel settling back, no longer flips him for a frame)
+          if (nf === facing) turnAcc = 0;
+          else if ((turnAcc += Math.abs(dx)) > 5 * W.unit || Math.abs(dx) > 8 * W.unit) {
+            turnAcc = 0;
+            // reversing at speed kicks up a skid puff
+            if (Math.abs(prevSpeed) > 350 && body.onGround && c.phase !== "ride") snowControl.puff(W.cx + nf * 16 * W.unit, screenY - 2, -nf);
+            facing = nf;
+          }
         }
         const zone = W.zones.find((z) => x >= z.x0 && x < z.x1) ?? W.zones[W.zones.length - 1];
         const theme = c.phase === "ride" ? "ride" : zone.theme;
@@ -393,12 +438,38 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
           }
           wasIce = onIce;
         }
-        const running = Math.abs(speed) > 700;
+        // walk/run from a smoothed speed with a gap between the two thresholds, so noisy trackpad input
+        // near the boundary doesn't flip the pose every frame
+        paceF += (Math.abs(speed) - paceF) * Math.min(1, dt * 10);
+        running = paceF > W.vh * (running ? 0.9 : 1.07);
         const stride = (hero.current?.strideUnits ?? 68) * W.unit * (skating ? 2.2 : running ? 1.5 : 1);
         // distance-locked cycle (feet planted up to ~1100 px/s), capped so a fling or a HUD jump reads as a sprint, not strobing legs
         const maxStep = 64 * dt;
-        if (c.phase !== "ride") phase += Math.max(-maxStep, Math.min(maxStep, (dx / stride) * TAU));
+        // the cycle only ever runs forward: walking left he is mirrored, so a reversed cycle would slide his planted boot
+        if (c.phase !== "ride") phase += Math.min(maxStep, (Math.abs(dx) / stride) * TAU);
         still = Math.abs(speed) < 14 ? still + dt : 0;
+        // stopped to read a board that his head and shoulders cover (short screens at the whiteboard, the plyo boxes
+        // by the loadouts): he fades back so its text shows through, and comes back as soon as he moves on
+        {
+          const hx0 = W.cx - 52 * W.unit;
+          const hx1 = W.cx + 52 * W.unit;
+          const hy0 = screenY - 240 * W.unit;
+          const hy1 = screenY - 130 * W.unit;
+          // a real overlap (a third of his head box), not a board edge grazing the top of his beanie
+          const covering =
+            still > 0.35 &&
+            pops.some((p) => {
+              if (!p.on) return false;
+              const ox = Math.min(hx1, p.right - c.camX) - Math.max(hx0, p.left - c.camX);
+              const oy = Math.min(hy1, p.bottom - c.camY) - Math.max(hy0, p.top - c.camY);
+              return ox > (hx1 - hx0) * 0.3 && oy > (hy1 - hy0) * 0.33;
+            });
+          heroFade += ((covering ? 0.3 : 1) - heroFade) * Math.min(1, dt * 6);
+          if (Math.abs(heroFade - lastHeroFade) > 0.004) {
+            lastHeroFade = heroFade;
+            if (charWrap.current) charWrap.current.style.opacity = heroFade > 0.996 ? "" : heroFade.toFixed(3);
+          }
+        }
 
         let pose: CharacterState;
         if (!body.onGround) pose = "jump";
@@ -424,7 +495,7 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
         // a crouch before each hop (the squash spring does the knees), a squash on landing
         const crouchNow = body.crouchedAt === time;
         const impact = landedNow ? Math.min(1, 0.5 + landSpeed / (W.charH * 6)) : crouchNow ? 0.55 : 0;
-        hero.current?.update({ state: pose, phase, facing, air, time, dt, impact });
+        hero.current?.update({ state: pose, phase, facing, air, time, dt, impact, ice: theme === "gulf" });
         if (indoor !== !OUTDOOR[theme]) {
           indoor = !OUTDOOR[theme];
           charWrap.current!.dataset.indoor = indoor ? "1" : "";
@@ -438,9 +509,17 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
           }
         }
 
+        camXRef.current = c.camX;
         if (time > nextCull) {
           nextCull = time + 0.25;
           cull(c.camX);
+          // a focused board link that he walked away from: focus goes back to the world, so Enter can't open a
+          // link you can't see and Space jumps again (not while the camera is still travelling to a tabbed link)
+          const a = document.activeElement;
+          if (a instanceof HTMLElement && a !== stage.current && worldEl.current?.contains(a) && time > focusTravelUntil) {
+            const r = a.getBoundingClientRect();
+            if (r.right < 0 || r.left > W.vw || r.bottom < 0 || r.top > W.vh) stage.current?.focus({ preventScroll: true });
+          }
         }
 
         // ---- winter effects ----
@@ -509,6 +588,23 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
         }
 
         // the summit: plant the flag, then fireworks while you enjoy the view
+        // (each shell bursts in open sky: clear of the speech bubble, the contact card, and Sayed with his flag)
+        const skySpot = (k: number): [number, number] => {
+          const keep = Math.min(110, W.vh * 0.16);
+          const avoid = [bubbleEl.current?.firstElementChild, worldEl.current?.querySelector("[data-summit-card]")]
+            .filter((el): el is Element => Boolean(el))
+            .map((el) => el.getBoundingClientRect());
+          avoid.push(new DOMRect(W.cx - 100 * W.unit, screenY - 360 * W.unit, 260 * W.unit, 360 * W.unit));
+          const spots: [number, number][] = [];
+          for (let fx = 0.06; fx < 0.95; fx += 0.04)
+            for (let fy = 0.16; fy < 0.44; fy += 0.04) {
+              const px = fx * W.vw;
+              const py = fy * W.vh;
+              if (avoid.every((r) => px + keep < r.left || px - keep > r.right || py + keep < r.top || py - keep > r.bottom)) spots.push([px, py]);
+            }
+          if (!spots.length) return [W.vw * (0.12 + 0.34 * ((k * 0.618) % 1)), W.vh * (0.22 + 0.16 * ((k * 0.382) % 1))];
+          return spots[Math.floor(((k * 0.618 + 0.1) % 1) * spots.length)];
+        };
         if (x >= W.anchors.contact.x - W.u * 0.02 && still > 0.5) {
           if (!flagged) {
             // flag planted: snow bursts from the peak, twilight falls and a volley of three shells goes up
@@ -518,7 +614,8 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
             sfx.firework();
             [0, 0.35, 0.7].forEach((d, k) =>
               gsap.delayedCall(d, () => {
-                snowControl.firework(W.vw * [0.16, 0.3, 0.42][k], W.vh * [0.34, 0.24, 0.38][k], W.vh * 0.95, FIREWORK_HUES[k]);
+                const [fx, fy] = skySpot(k * 3 + 1);
+                snowControl.firework(fx, fy, W.vh * 0.95, FIREWORK_HUES[k]);
                 if (k) sfx.firework();
               }),
             );
@@ -528,7 +625,8 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
             nextFirework = time + 1.6 + (fireworkK % 3) * 0.5;
             sfx.firework();
             const k = fireworkK++;
-            snowControl.firework(W.vw * (0.12 + 0.34 * ((k * 0.618) % 1)), W.vh * (0.22 + 0.16 * ((k * 0.382) % 1)), W.vh * 0.95, FIREWORK_HUES[k % FIREWORK_HUES.length]);
+            const [fx, fy] = skySpot(k);
+            snowControl.firework(fx, fy, W.vh * 0.95, FIREWORK_HUES[k % FIREWORK_HUES.length]);
           }
         } else if (x < W.anchors.contact.x - W.u * 0.08 && flagged) {
           flagged = false;
@@ -586,7 +684,7 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
           for (const cr of critters) {
             if (cr.kind === "camel") continue;
             const d = Math.abs(x - cr.x);
-            const reach = cr.kind === "bag" ? W.u * 0.1 : cr.kind === "bulbul" ? W.u * 0.35 : W.u * 0.5;
+            const reach = cr.kind === "bag" ? W.u * 0.1 : cr.kind === "bulbul" ? W.u * 0.35 : cr.kind === "oyster" ? W.u * 0.6 : W.u * 0.5;
             if (!cr.gone && d < reach && (cr.kind !== "bag" || Math.abs(speed) > 60)) {
               cr.gone = true;
               react(cr, x);
@@ -654,7 +752,27 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
         if (hintEl.current) hintEl.current.style.opacity = String(Math.max(0, 1 - s / (W.vw * 0.12)));
 
         // ---- altitude: the sky deepens as you climb ----
-        if (altitude.current) altitude.current.style.opacity = String(Math.max(0, Math.min(1, -c.camY / (R.D * R.sin))) * 0.85);
+        if (warmEl.current) {
+          // warms up across the Gulf (from its title to its last stop), fades again on the shore before the gym
+          const g0 = W.gulf.x0 + W.u * 0.8;
+          const g1 = W.gulf.x1;
+          const k = Math.max(0, Math.min(1, (x - g0) / (g1 - g0)));
+          const out = Math.max(0, Math.min(1, (x - g1) / (W.u * 0.9)));
+          const wv = +(Math.min(1, k * 1.6) * (1 - out)).toFixed(3);
+          if (wv !== lastWarm) {
+            lastWarm = wv;
+            warmEl.current.style.opacity = String(wv);
+          }
+        }
+        if (altitude.current) {
+          const alt = Math.max(0, Math.min(1, -c.camY / (R.D * R.sin))) * 0.85;
+          if (alt !== lastAlt) {
+            // the aurora only drifts once the deep sky shows (idle, its two animated layers would cost every frame)
+            if (!alt !== !lastAlt) altitude.current.toggleAttribute("data-on", alt > 0);
+            lastAlt = alt;
+            altitude.current.style.opacity = String(alt);
+          }
+        }
 
         // ---- level toast + HUD ----
         const level = zone.level;
@@ -677,7 +795,13 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
         const L = lenisRef.current;
         if (L) {
           const want = theme === "gulf" ? 0.06 : c.phase === "ride" ? 0.1 : 0.14;
-          if (L.options.lerp !== want) L.options.lerp = want;
+          // eased in over about a second: snapping it would brake him on the ice edge and surge him off it
+          // (the scroll lag Lenis carries depends on the lerp)
+          const cur = L.options.lerp ?? 0.14;
+          if (cur !== want) L.options.lerp = Math.abs(want - cur) < 0.001 ? want : cur + (want - cur) * Math.min(1, dt * 1.6);
+          // the world is sized in screen heights, so a tall monitor has more pixels to cross: scale the wheel with it
+          const wheel = 0.9 * Math.max(1, W.vh / 700);
+          if (L.options.wheelMultiplier !== wheel) L.options.wheelMultiplier = wheel;
         }
         snowControl.wind = speed;
       };
@@ -687,6 +811,21 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
       const ready = () => requestAnimationFrame(() => onReadyRef.current?.());
       if (!firstScene || firstScene.complete) ready();
       else firstScene.decode().then(ready, ready);
+      // then decode the rest of the art in the background (paintings first), so a long jump (End, a HUD level,
+      // a tabbed link far away) lands on finished scenery instead of boards floating on bare sky
+      let predecode = true;
+      const warm = async () => {
+        const imgs = [worldEl.current, frontEl.current].flatMap((el) => Array.from(el?.querySelectorAll<HTMLImageElement>("img") ?? []));
+        imgs.sort((a, b) => Number(b.src.includes("/scenes/")) - Number(a.src.includes("/scenes/")));
+        const seen = new Set<string>();
+        for (const img of imgs) {
+          if (!predecode) return;
+          if (seen.has(img.src)) continue;
+          seen.add(img.src);
+          await img.decode().catch(() => {});
+        }
+      };
+      const warmId = window.setTimeout(() => ("requestIdleCallback" in window ? requestIdleCallback(() => warm(), { timeout: 3000 }) : warm()), 600);
 
       // Keyboard users: tabbing to a link on a board travels the world there.
       const onFocus = (e: FocusEvent) => {
@@ -706,6 +845,7 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
         }
         const r = (e.target as HTMLElement).getBoundingClientRect();
         if (r.left >= 0 && r.right <= W.vw && r.top >= 0 && r.bottom <= W.vh) return; // already on screen
+        focusTravelUntil = gsap.ticker.time + 2.2;
         scrollToY(lenisRef.current, trackTop() + sForWorldX(W, Number(el.dataset.x) + W.vw * 0.34));
       };
       stage.current!.addEventListener("focusin", onFocus);
@@ -719,12 +859,18 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
       worldStore.setNav({
         goTo: (i, immediate) => {
           scrollToY(lenisRef.current, trackTop() + W.levelJumps[Math.max(0, Math.min(W.levelJumps.length - 1, i))], immediate);
+          if (document.activeElement instanceof HTMLButtonElement) stage.current?.focus({ preventScroll: true });
         },
       });
 
       return () => {
+        predecode = false;
+        window.clearTimeout(warmId);
         gsap.ticker.remove(render);
-        if (lenisRef.current) lenisRef.current.options.lerp = 0.14;
+        if (lenisRef.current) {
+          lenisRef.current.options.lerp = 0.14;
+          lenisRef.current.options.wheelMultiplier = 0.9;
+        }
         snowControl.wind = 0;
         stage.current?.removeEventListener("focusin", onFocus);
         stage.current?.removeEventListener("focusout", onBlur);
@@ -736,75 +882,135 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
     { dependencies: [world], scope: stage, revertOnUpdate: true },
   );
 
-  // Touch screens in landscape: a sideways swipe walks too (vertical swipes already scroll natively).
+  // Touch screens in landscape: a sideways swipe walks too (vertical swipes already scroll natively),
+  // and a sideways flick glides on for a moment like the native fling.
   useEffect(() => {
     const el = stage.current;
     if (!el) return;
+    let x0 = 0;
+    let y0 = 0;
     let px = 0;
-    let py = 0;
     let goal = 0;
+    let vel = 0; // scroll px per ms over the last moves
+    let lastT = 0;
+    let glide = 0;
     let sideways: boolean | null = null;
-    const start = (e: TouchEvent) => {
-      px = e.touches[0].clientX;
-      py = e.touches[0].clientY;
-      sideways = null;
-      goal = lenisRef.current ? lenisRef.current.animatedScroll : window.scrollY;
-    };
-    const move = (e: TouchEvent) => {
-      const t = e.touches[0];
-      const dx = t.clientX - px;
-      const dy = t.clientY - py;
-      if (sideways === null && Math.hypot(dx, dy) > 8) sideways = Math.abs(dx) > Math.abs(dy);
-      if (!sideways) return;
-      e.preventDefault();
-      px = t.clientX;
-      py = t.clientY;
-      const max = document.documentElement.scrollHeight - window.innerHeight;
-      goal = Math.max(0, Math.min(max, goal - dx * 1.6));
+    const go = (to: number) => {
+      goal = Math.max(0, Math.min(document.documentElement.scrollHeight - window.innerHeight, to));
       const L = lenisRef.current;
       if (L) L.scrollTo(goal, { lerp: 0.2 });
       else window.scrollTo(0, goal);
     };
+    const start = (e: TouchEvent) => {
+      cancelAnimationFrame(glide);
+      x0 = px = e.touches[0].clientX;
+      y0 = e.touches[0].clientY;
+      sideways = null;
+      vel = 0;
+      lastT = e.timeStamp;
+      goal = lenisRef.current ? lenisRef.current.animatedScroll : window.scrollY;
+    };
+    const move = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (sideways === null) {
+        const ax = Math.abs(t.clientX - x0);
+        const ay = Math.abs(t.clientY - y0);
+        if (Math.hypot(ax, ay) < 10) return;
+        // clearly sideways only: an arc that drifts sideways stays a native vertical scroll
+        sideways = ax > ay * 1.5;
+      }
+      if (!sideways) return;
+      // claim the gesture, and keep it from Lenis too: it treats a touch move as native scrolling and would
+      // cancel our scrollTo in the same event
+      e.preventDefault();
+      e.stopPropagation();
+      const dx = t.clientX - px;
+      px = t.clientX;
+      const dt = Math.max(1, e.timeStamp - lastT);
+      lastT = e.timeStamp;
+      vel = vel * 0.5 + ((-dx * 1.6) / dt) * 0.5;
+      go(goal - dx * 1.6);
+    };
+    const end = (e: TouchEvent) => {
+      if (!sideways || e.timeStamp - lastT > 80) return; // held still before letting go: no glide
+      let v = vel * 16; // px per frame, easing out over about half a second
+      const step = () => {
+        v *= 0.9;
+        if (Math.abs(v) < 0.6) return;
+        go(goal + v);
+        glide = requestAnimationFrame(step);
+      };
+      if (Math.abs(v) > 2) glide = requestAnimationFrame(step);
+    };
     el.addEventListener("touchstart", start, { passive: true });
     el.addEventListener("touchmove", move, { passive: false });
+    el.addEventListener("touchend", end, { passive: true });
     return () => {
+      cancelAnimationFrame(glide);
       el.removeEventListener("touchstart", start);
       el.removeEventListener("touchmove", move);
+      el.removeEventListener("touchend", end);
     };
   }, [world]);
 
   // Keyboard: hold ← → (or A / D) to walk at a steady pace; ↑, W or Space jumps.
   useEffect(() => {
     let dir = 0;
+    let held: number[] = []; // directions held down, the latest last
+    let fast = false;
     let raf = 0;
     let last = 0;
     let goal = 0;
     const walk = (t: number) => {
-      const dt = Math.min(0.05, (t - last) / 1000);
+      const dt = Math.min(0.1, (t - last) / 1000);
       last = t;
       if (!dir) return;
       const L = lenisRef.current;
       const max = document.documentElement.scrollHeight - window.innerHeight;
-      goal = Math.max(0, Math.min(max, goal + dir * window.innerHeight * 1.45 * dt));
+      goal = Math.max(0, Math.min(max, goal + dir * window.innerHeight * (fast ? 2 : 1) * dt));
       if (L) L.scrollTo(goal, { lerp: 0.14 });
       else window.scrollTo(0, goal);
       raf = requestAnimationFrame(walk);
     };
+    const setDir = (d: number) => {
+      if (d === dir) return;
+      dir = d;
+      if (!d) return;
+      goal = lenisRef.current ? lenisRef.current.animatedScroll : window.scrollY;
+      last = performance.now();
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(walk);
+    };
     const keyDir = (k: string) => (k === "ArrowRight" || k === "d" || k === "D" ? 1 : k === "ArrowLeft" || k === "a" || k === "A" ? -1 : 0);
     const onDown = (e: KeyboardEvent) => {
+      if (e.key === "Shift") fast = true;
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target as HTMLElement | null;
       if (t?.closest?.("dialog, input, textarea, select")) return;
+      // Tab from the world itself or off the end of the HUD enters the world at the player, not at its first link
+      if (e.key === "Tab" && !e.shiftKey && W0.current) {
+        const hud = Array.from(document.querySelectorAll<HTMLElement>("header a[href], header button:not([disabled])")).filter((el) => el.offsetParent);
+        if (t === stage.current || (hud.length && t === hud[hud.length - 1])) {
+          const from = camXRef.current - W0.current.vw * 0.1;
+          let best: HTMLElement | null = null;
+          let bestX = Infinity;
+          for (const el of Array.from(worldEl.current?.querySelectorAll<HTMLElement>("a[href], button:not([disabled])") ?? [])) {
+            const x = Number(el.closest<HTMLElement>("[data-x]")?.dataset.x ?? NaN);
+            if (x >= from && x < bestX) (best = el), (bestX = x);
+          }
+          if (best) {
+            e.preventDefault();
+            best.focus();
+          }
+        }
+        return;
+      }
       const d = keyDir(e.key);
       if (d) {
         e.preventDefault();
-        if (dir !== d) {
-          dir = d;
-          goal = lenisRef.current ? lenisRef.current.animatedScroll : window.scrollY;
-          last = performance.now();
-          cancelAnimationFrame(raf);
-          raf = requestAnimationFrame(walk);
-        }
+        fast = e.shiftKey;
+        held = [...held.filter((h) => h !== d), d];
+        setDir(d);
         return;
       }
       const jumpKey = e.key === "ArrowUp" || e.key === "w" || e.key === "W" || (e.key === " " && !t?.closest?.("a, button, [role=button]"));
@@ -814,9 +1020,16 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
       }
     };
     const onUp = (e: KeyboardEvent) => {
-      if (keyDir(e.key) === dir) dir = 0;
+      if (e.key === "Shift") fast = false;
+      const d = keyDir(e.key);
+      if (!d) return;
+      held = held.filter((h) => h !== d);
+      setDir(held.length ? held[held.length - 1] : 0);
     };
-    const stop = () => (dir = 0);
+    const stop = () => {
+      held = [];
+      dir = 0;
+    };
     window.addEventListener("keydown", onDown);
     window.addEventListener("keyup", onUp);
     window.addEventListener("blur", stop);
@@ -833,13 +1046,14 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
     <div ref={track} style={{ height: W ? W.ride.maxS + W.vh : "100vh" }}>
       <section
         ref={stage}
+        tabIndex={-1}
         aria-label="Sayed Jehad World, an interactive side-scrolling resume (the same content is in the text resume)"
         data-world
-        className="sticky top-0 h-screen w-full overflow-hidden bg-[#1aa6f2]"
+        className="sticky top-0 h-screen w-full overflow-hidden bg-[#1aa6f2] outline-none"
       >
         {W && (
           <>
-            <Backdrop world={W} altitudeRef={altitude} />
+            <Backdrop world={W} altitudeRef={altitude} warmRef={warmEl} />
             <div ref={worldEl} className="absolute left-0 top-0 z-10 h-0 w-0 will-change-transform">
               <WorldArt world={W} layer="back" />
               <Critters world={W} layer="back" />
@@ -938,7 +1152,9 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
             {/* how to play: the first screen tells you the mouse wheel walks; fades as you set off */}
             <div ref={hintEl} aria-hidden="true" className="pointer-events-none absolute left-1/2 top-[88px] z-[47] -translate-x-1/2">
               <div className="level-toast-in">
-                <WheelHint />
+                <div className="how-to-play">
+                  <WheelHint />
+                </div>
               </div>
             </div>
 

@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { memo, useState, type CSSProperties, type ReactNode } from "react";
-import { certificates, currentRole, education, heritage, profile, projects, roles, skillGroups, stack, stats, values } from "@/data/resume";
+import { certificates, currentRole, education, gymQuote, heritage, profile, projects, roles, skillGroups, stack, stats, values } from "@/data/resume";
 import { worldStore } from "@/lib/progress";
 import { focusHudLevel, openQuickResume } from "../Hud";
 import { Icon, type IconName } from "../ui/Icon";
@@ -68,8 +68,8 @@ function Ribbon({ children, tone = "wood", color }: { children: ReactNode; tone?
 const txt = "text-[clamp(12px,1.6vh,15.5px)] leading-snug";
 /** Player 1's character sheet: who he is (the counts are on the stat crystals just ahead). */
 const SHEET: { icon: IconName; label: string; value: string }[] = [
-  { icon: "robot", label: "Class", value: currentRole.title },
-  { icon: "buildings", label: "Guild", value: `${currentRole.company} · ${currentRole.companyNote}` },
+  { icon: "robot", label: "Job title", value: currentRole.title },
+  { icon: "buildings", label: "Current company", value: `${currentRole.company} · ${currentRole.companyNote}` },
   { icon: "graduation-cap", label: "Trained at", value: education.school },
   { icon: "map-pin", label: "Home", value: profile.base },
   { icon: "translate", label: "Languages", value: profile.languages.join(" · ") },
@@ -264,20 +264,30 @@ export const Sections = memo(function Sections({ world: W }: { world: World }) {
           { vi: 2, x0: 0.33, x1: 0.67, y0: 0.4 },
           { vi: 1, x0: 0.804, x1: 0.927, y0: 0.415 },
         ];
-        return boxes.map(({ vi, x0, x1, y0 }) => {
+        // his favourite line as a neon sign on the strip of wall between the ceiling fan and the window
+        const qw = gym.w * 0.5;
+        const qFont = Math.min(gym.h * 0.027, qw / (gymQuote.length * 0.56));
+        const sign = (
+          <figure key="quote" className="neon-quote absolute m-0 -translate-x-1/2" style={{ left: gym.x + 0.5 * gym.w, top: gym.y + 0.197 * gym.h }}>
+            <blockquote className="neon-text whitespace-nowrap font-display tracking-[0.06em] uppercase" style={{ fontSize: qFont }}>
+              {gymQuote}
+            </blockquote>
+          </figure>
+        );
+        return [sign, ...boxes.map(({ vi, x0, x1, y0 }) => {
           const left = gym.x + x0 * gym.w;
           const width = (x1 - x0) * gym.w;
           return (
             <Pop key={vi} x={left} kind="pop" style={{ left, top: y0 * gym.h, width }}>
-              <div className={`poster-caption ${vi === 2 ? "px-3 py-2 text-center" : "px-2 py-1.5"}`}>
+              <div data-glass={vi === 2 ? "" : undefined} className={`poster-caption ${vi === 2 ? "px-3 py-2 text-center" : "px-2 py-1.5"}`}>
                 <h3 className="sr-only">{values[vi].motto}</h3>
-                <p className={vi === 2 ? "text-[clamp(12px,1.75vh,24px)] leading-snug" : "text-[clamp(10.5px,1.45vh,20px)] leading-snug"}>
+                <p className={vi === 2 ? "text-[clamp(12px,1.75vh,24px)] leading-snug" : "text-[clamp(12px,1.45vh,20px)] leading-snug"}>
                   {vi === 2 ? values[vi].proof : values[vi].short}
                 </p>
               </div>
             </Pop>
           );
-        });
+        })];
       })()}
 
       {skillGroups.map((g, k) => {
@@ -477,7 +487,7 @@ export const Sections = memo(function Sections({ world: W }: { world: World }) {
         const left = s.x + W.charH * 0.75;
         return (
           <Pop x={s.x - W.vw * 0.3} kind="slide" zoom={Z} style={{ left, top: R.Sy + safe(0.14), width: w }}>
-            <div className="frost shimmer p-6">
+            <div data-summit-card className="frost shimmer p-6">
               <span className="shine" />
               <Px className="text-[12px] text-[#0c69ad]">Level 5 · Complete</Px>
               <h2 className="mt-1 font-display text-[clamp(26px,4.2vh,44px)] leading-[0.95] tracking-wide text-ink">You reached the top!</h2>
@@ -496,18 +506,18 @@ export const Sections = memo(function Sections({ world: W }: { world: World }) {
                 </a>
               </div>
               <CopyEmail />
-              <div className="mt-4 flex items-center justify-between gap-2 text-sm">
+              <div className="mt-2 flex items-center justify-between gap-2 text-sm">
                 <button
                   type="button"
                   onClick={() => {
                     worldStore.goTo(0);
                     focusHudLevel(0);
                   }}
-                  className="inline-flex items-center gap-1.5 font-bold text-[#0c69ad] hover:underline"
+                  className="inline-flex min-h-11 items-center gap-1.5 px-1 font-bold text-[#0c69ad] hover:underline"
                 >
                   <Icon name="arrow-counter-clockwise" className="size-4" /> Play again
                 </button>
-                <button type="button" onClick={openQuickResume} className="inline-flex items-center gap-1.5 font-bold text-[#0c69ad] hover:underline">
+                <button type="button" onClick={openQuickResume} className="inline-flex min-h-11 items-center gap-1.5 px-1 font-bold text-[#0c69ad] hover:underline">
                   <Icon name="list" className="size-4" /> Quick resume
                 </button>
               </div>

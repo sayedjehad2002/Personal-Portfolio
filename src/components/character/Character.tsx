@@ -38,6 +38,8 @@ export type CharacterFrame = {
   impact?: number;
   /** force an expression (lab / cut-scenes); otherwise chosen from `state` */
   expression?: Expression;
+  /** on the ice: ice-skate blades under his boots */
+  ice?: boolean;
 };
 
 export type CharacterHandle = {
@@ -310,27 +312,29 @@ function targetPose(f: CharacterFrame, ph: number, j: JumpInfo, prof: boolean): 
       };
     }
     case "skate": {
-      // push-and-glide: one leg drives back while the other glides flat, arms swing wide
+      // push-and-glide like a speed skater: crouched low, one leg drives back and lifts off the ice while he glides
+      // on the other, the arms swing wide and slow; the glide holds (a shaped cycle) instead of stepping
       const push = Math.sin(ph);
-      const pN = Math.max(0, push);
-      const pF = Math.max(0, -push);
+      const shaped = Math.sign(push) * Math.pow(Math.abs(push), 0.7);
+      const pN = Math.max(0, shaped);
+      const pF = Math.max(0, -shaped);
       return {
         ...ZERO,
-        bodyY: 1.5 - Math.abs(Math.cos(ph)) * 1.2,
-        lean: 14,
-        head: -6 + Math.sin(ph * 2) * 1,
-        legN: -16 + pN * 50,
-        legF: -16 + pF * 50,
-        kneeN: 26 - pN * 20,
-        kneeF: 26 - pF * 20,
-        tyN: -4 * pN * pN,
-        tyF: -4 * pF * pF,
-        footN: 6 * pN * pN,
-        footF: 6 * pF * pF,
-        armN: -push * 50 - 4,
-        armF: push * 44 - 4,
-        elbowN: -20,
-        elbowF: -20,
+        bodyY: 4 - Math.abs(Math.cos(ph)) * 1.4,
+        lean: 19,
+        head: -9 + Math.sin(ph * 2) * 1,
+        legN: -26 + pN * 92,
+        legF: -26 + pF * 92,
+        kneeN: 38 - pN * 34,
+        kneeF: 38 - pF * 34,
+        tyN: -11 * pN * pN,
+        tyF: -11 * pF * pF,
+        footN: 14 * pN * pN,
+        footF: 14 * pF * pF,
+        armN: -shaped * 78 - 8,
+        armF: shaped * 70 - 8,
+        elbowN: -16,
+        elbowF: -16,
       };
     }
     case "jump": {
@@ -724,6 +728,8 @@ export const Character = forwardRef<CharacterHandle, { className?: string; title
     bag: { x: 0, v: 0 } as Spring,
     nod: { x: 0, v: 0 } as Spring,
     far: [] as Element[],
+    skates: [] as SVGElement[],
+    skatesOn: false,
   });
 
   useImperativeHandle(
@@ -740,9 +746,14 @@ export const Character = forwardRef<CharacterHandle, { className?: string; title
           S.face = f.facing;
           S.ph = S.rawPh = f.phase || 0;
           S.far = svg.current ? Array.from(svg.current.querySelectorAll("[data-far]")) : [];
+          S.skates = svg.current ? Array.from(svg.current.querySelectorAll<SVGElement>("[data-skate]")) : [];
           expr.current.since = expr.current.wantSince = -1e9;
         }
         S.clock += dt;
+        if (!!f.ice !== S.skatesOn) {
+          S.skatesOn = !!f.ice;
+          for (const el of S.skates) el.style.display = S.skatesOn ? "" : "none";
+        }
 
         // ---- walk phase: follow the distance, but never step more than ~0.5 rad a frame (no strobing);
         // far above run speed hold a dash pose until the scroll slows down
@@ -1209,7 +1220,7 @@ export const Character = forwardRef<CharacterHandle, { className?: string; title
                 <path d="M44.6 66 Q46.2 73.2 51.4 76 L50.4 73.4 Q47.2 70.6 46.6 66 Z" fill={C.jawSh} />
                 <path d="M96.6 40 L99 40 L99 68 Q98.6 74 95.6 77.6 Q97.2 73 97.1 67.5 Z" fill={C.skinSh} opacity="0.8" />
                 {/* one small mole on the far cheek (in all the sheet's faces) */}
-                <circle cx="95.4" cy="58.8" r="0.72" fill={C.mole} />
+                <circle cx="96" cy="60.3" r="0.72" fill={C.mole} />
                 {/* nose: soft bulb, lit upper-right, warm underside, nostril hint lower-left */}
                 <path d="M75 60 Q79.6 56 84.6 58.6 Q87 61.4 85.6 63.8 Q83 66 79.4 65.8 Q75.6 65.6 74.6 63 Z" fill={C.nose} />
                 <path d="M76 63.6 Q79.6 66.4 85.2 63.8 Q83 65.9 79.4 65.9 Q76.6 65.7 76 63.6 Z" fill={C.skinSh2} opacity="0.55" />
@@ -1223,7 +1234,7 @@ export const Character = forwardRef<CharacterHandle, { className?: string; title
                 {/* full chin beard: rounded and heavier toward the near side, wrapping back along the jaw
                     to the hair under the cup (the sheet's beard is not a narrow block) */}
                 <path
-                  d="M66.4 80.4 L88.2 80.2 L91.3 79.8 Q91.4 84.6 88.4 87.2 Q86.2 89 83.8 89.4 L82.8 88.4 L81.6 90.2 Q76 91.6 70.4 90.8 L69.4 89.6 L68.2 90.6 Q61.6 89.8 57.2 86.6 Q51.4 83.2 47.2 78.8 Q44.6 75.8 43.6 71.6 L45.6 71 Q47.8 75.4 52.6 77.8 Q58.6 80.8 66.4 80.4 Z"
+                  d="M66.4 80.4 L88.2 80.2 L91.3 79.8 Q90.8 84.4 87.4 87.2 Q85.6 88.8 83.8 89.4 L82.8 88.4 L81.6 90.2 Q76 91.6 70.4 90.8 L69.4 89.6 L68.2 90.6 Q61.6 89.8 57.2 86.6 Q51.4 83.2 47.2 78.8 Q44.6 75.8 43.6 71.6 L45.6 71 Q47.8 75.4 52.6 77.8 Q58.6 80.8 66.4 80.4 Z"
                   fill={C.hair}
                 />
                 <path d="M60 84.4 Q65 87.2 71.4 87.8" stroke={C.hairHi} strokeWidth="0.8" fill="none" opacity="0.6" strokeLinecap="round" />
@@ -1511,6 +1522,17 @@ function Boot({ h, t, far = false }: { h: number; t: number; far?: boolean }) {
       <path d={`M${f2(h + 12)} 173.4 L${f2(t - 1.6)} 173.4`} stroke={C.bootDark} strokeWidth="0.8" opacity="0.6" />
       <rect x={f2(sx)} y="176" width={f2(sw)} height="4.2" rx="1.2" fill={C.sole} stroke={C.ol} strokeWidth="1" />
       <path d={`M${f2(sx + 1.2)} 176.9 L${f2(sx + sw - 1)} 176.9`} stroke={C.soleLip} strokeWidth="0.9" />
+      {/* ice-skate blade, shown on the frozen Gulf: a steel runner under the sole with a curled toe */}
+      <g data-skate="" style={{ display: "none" }}>
+        <path
+          d={`M${f2(h - 1.5)} 180 L${f2(t + 1.5)} 180 Q${f2(t + 5.4)} 180 ${f2(t + 5)} 177.2 Q${f2(t + 6.8)} 180.4 ${f2(t + 3)} 182.6 L${f2(h - 1.5)} 182.6 Q${f2(h - 3)} 181.3 ${f2(h - 1.5)} 180 Z`}
+          fill="#dbe7f4"
+          stroke={C.ol}
+          strokeWidth="0.9"
+          strokeLinejoin="round"
+        />
+        <path d={`M${f2(h)} 181 L${f2(t + 2)} 181`} stroke="#ffffff" strokeWidth="0.7" opacity="0.9" />
+      </g>
       {far && <path data-far="" d={out} fill={C.farShade} opacity="0" />}
     </>
   );

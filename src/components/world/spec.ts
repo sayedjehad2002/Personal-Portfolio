@@ -64,7 +64,7 @@ export type Bubble = { x0: number; x1: number; text: string; side?: "left" | "ri
 
 /** Wildlife and moving kit: flamingos and bulbuls fly off, the hare hops away, the bag swings, fish swim under the ice. */
 export type Critter = {
-  kind: "flamingo" | "bulbul" | "hare" | "camel" | "bag" | "fish" | "fish2";
+  kind: "flamingo" | "bulbul" | "hare" | "camel" | "bag" | "fish" | "fish2" | "oyster";
   x: number;
   /** world y of the feet (for the bag: its hang point) */
   ground: number;
@@ -227,7 +227,7 @@ export function buildWorld(vw: number, vh: number): World {
   const base = addScene("base", 0, "forest", { l: 0.06, r: true });
   prop("pine-tall", base.x0 - 0.1 * u, OUT, 0.6, { layer: "back" });
   anchors.start = { x: base.x0 + 0.5 * baseW, ground: OUT };
-  bubbles.push({ x0: pre.x0, x1: base.x0 + baseW * 0.62, text: "Hey, I’m Sayed, an AI System Developer from Bahrain. This is my interactive resume!", dy: 0.8 });
+  bubbles.push({ x0: pre.x0, x1: base.x0 + baseW * 0.62, text: "Hey, I’m Sayed, AI System Developer at Lumofy, from Bahrain. This is my interactive resume!", dy: 0.6 }); // beside his shoulder, clear of the start sign above
 
   const T1 = 1.3 * u; // room for the title
   const forest = addCorridor("forest", 0, 3.9 * u + T1, OUT);
@@ -249,7 +249,7 @@ export function buildWorld(vw: number, vh: number): World {
   const ledgeTop = OUT - ledge.h * 0.88;
   prop("snow-ledge", ledge.x, OUT, ledge.h / u, { w: ledge.w, platform: true });
   flat(ledge.x - ledge.w * 0.44, ledge.x + ledge.w * 0.44, ledgeTop);
-  prop("snowman", ledge.x + ledge.w * 0.28, ledgeTop, 0.2);
+  prop("snowman", ledge.x + ledge.w * 0.5 + 0.1 * u, OUT, 0.2, { layer: "back" });
   critters.push({ kind: "hare", x: fx0 + 2.98 * u, ground: OUT, h: 0.09 * u });
   critters.push({ kind: "bulbul", x: fx0 + 1.3 * u, ground: OUT - 0.138 * u, h: 0.042 * u });
   critters.push({ kind: "bulbul", x: fx0 + 1.7 * u, ground: OUT - 0.138 * u, h: 0.038 * u, flip: true });
@@ -305,6 +305,8 @@ export function buildWorld(vw: number, vh: number): World {
   for (let k = 0; k < 7; k++)
     critters.push({ kind: k % 2 ? "fish2" : "fish", x: gulf.x0 + (0.9 + k * 1.05) * u, ground: OUT + (0.045 + (k % 3) * 0.028) * u, h: (k % 2 ? 0.036 : 0.05) * u, flip: k % 3 === 1 });
   prop("dhow", gx0 + 2.2 * u, OUT, 0.34, { layer: "back" });
+  // pearl oysters frozen into the ice (Bahrain's pearling heritage): they open and show their pearl as he skates by
+  [4.05, 5.8].forEach((f) => critters.push({ kind: "oyster", x: gx0 + f * u, ground: OUT + 0.006 * u, h: 0.075 * u }));
   prop("dhow", gx0 + 5.05 * u, OUT, 0.3, { layer: "back", flip: true });
   prop("snowman", gulf.x1 - 0.3 * u, OUT, 0.22);
   // shore banks hide the land/ice joins (art: walk line flat with the ground, join at x=94 of 192)
@@ -462,8 +464,8 @@ export function buildWorld(vw: number, vh: number): World {
     const floorAt = by - (px - bx) * Math.tan(THETA);
     return { x: px, base: slopeAt(px), top: floorAt - grip };
   });
-  // slope decoration: pines and rocks along the lower half
-  [0.08, 0.2, 0.34, 0.5].forEach((f, k) => {
+  // slope decoration: pines and snowy rocks the whole way up
+  [0.08, 0.2, 0.34, 0.5, 0.64, 0.76].forEach((f, k) => {
     const px = bx + 0.6 * u + f * (tx - bx);
     prop(k % 2 ? "snow-rock" : "pine-small", px, slopeAt(px) + 0.012 * u, k % 2 ? 0.12 : 0.28, { layer: "back" });
   });
@@ -479,7 +481,8 @@ export function buildWorld(vw: number, vh: number): World {
   prop("station-top", topLeft + (760 * unit) / 2, ty + (580 - 540) * unit, (580 * unit) / u, { layer: "back", w: 760 * unit });
   const standX = sx(0.6375);
   anchors.contact = { x: standX, ground: sy(0.611) }; // the end of the path: he plants the flag here
-  bubbles.push({ x0: sx(0.5), x1: Sx + sw + vw, text: "Made it! Let’s build something together.", side: "left" });
+  // only once he is out from behind the sign (it ends at 0.529 of the painting), so the bubble never covers its words
+  bubbles.push({ x0: sx(0.575), x1: Sx + sw + vw, text: "Made it! Let’s build something together.", side: "left" });
   const rock: [number, number][] = [
     [0.18, 0.83],
     [0.27, 0.775],
@@ -513,9 +516,12 @@ export function buildWorld(vw: number, vh: number): World {
     flat(a0, a1, z.ground, "ground");
   }
   for (const rp of ramps) solids.push({ x0: rp.x - rp.half, x1: rp.x + rp.half, y0: rp.y0, y1: rp.y1, kind: "ground" });
-  flat(topLeft + 8 * unit, Math.max(sx(0.18), topLeft + 752 * unit), ty, "platform"); // top station deck onto the rocks
-  for (let i = 0; i < rock.length - 1; i++) {
-    solids.push({ x0: sx(rock[i][0]), x1: sx(rock[i + 1][0]), y0: sy(rock[i][1]), y1: sy(rock[i + 1][1]), kind: "rock" });
+  const deckEnd = Math.max(sx(0.18), topLeft + 752 * unit);
+  flat(topLeft + 8 * unit, deckEnd, ty, "platform"); // top station deck onto the rocks
+  // the rock path starts where the deck ends, at the deck's height (it used to start 0.01 vh higher: a one-frame pop)
+  const rockPts: [number, number][] = [[deckEnd, ty], ...rock.map(([fx, fy]): [number, number] => [sx(fx), sy(fy)]).filter(([px]) => px > deckEnd + 0.04 * u)];
+  for (let i = 0; i < rockPts.length - 1; i++) {
+    solids.push({ x0: rockPts[i][0], x1: rockPts[i + 1][0], y0: rockPts[i][1], y1: rockPts[i + 1][1], kind: "rock" });
   }
   flat(tail.x0, tail.x1, sy(0.85), "ground");
 
@@ -524,7 +530,12 @@ export function buildWorld(vw: number, vh: number): World {
   const Wk = standX - tx;
   const maxS = H + D + Wk;
   const levelStarts = [0, ...levelGates.map((g) => clamp(g - cx, 0, maxS))];
-  const levelJumps = [0, ...levelGates.slice(0, 3).map((g) => clamp(g - cx + 0.35 * u, 0, maxS)), maxS];
+  // a HUD level jump lands just past the level's gate, far enough that the previous level's last board is fully
+  // off-screen (a board half cut by the left edge looks broken); the skills loadout is the only one that reaches
+  // that close to its gate (its width: boardW(0.95, 380, 720) x the tall-screen zoom in sections.tsx)
+  const Zb = Math.min(1.6, Math.max(1, vh / 950));
+  const lastBoardRight = [0, 0, anchors["skills-people"].x + (Math.max(380, Math.min(720, 0.95 * u)) * Zb) / 2 + 12];
+  const levelJumps = [0, ...levelGates.slice(0, 3).map((g, i) => clamp(Math.max(g - cx + 0.35 * u, lastBoardRight[i]), 0, maxS)), maxS];
 
   const idlePose = (px: number): CharacterState => {
     if (px < base.x1) return "wave";

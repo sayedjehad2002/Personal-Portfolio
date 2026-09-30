@@ -138,12 +138,15 @@ export const projects: Project[] = [
     blurb: "Delivered for the L&D team: SCORM and proxy provisioning.",
   },
   {
-    id: "curator",
-    name: "AI Curator",
-    kind: "L&D internal tool",
-    blurb: "Delivered for the L&D team: AI-assisted course development.",
+    id: "founder-os",
+    name: "Founder OS",
+    kind: "Company-wide system",
+    blurb: "A full operating system linking all teams, to track performance and enable alignment across the whole company.",
   },
 ];
+
+/** Sayed's favourite line, on a neon sign in the gym (Discipline Lab). */
+export const gymQuote = "Hard work beats talent when talent doesn’t work hard.";
 
 /** Projects named on the CV vs the total it states. */
 export const liveProjectCount = 5;
@@ -240,11 +243,11 @@ export const heritage = [
 ];
 
 export const chapters = [
-  { id: "base-camp", level: 1, name: "Base Camp", tagline: "Welcome to Sayed Jehad World" },
-  { id: "bahrain", level: 2, name: "Bahrain", tagline: "Roots, heritage & first roles" },
-  { id: "gym", level: 3, name: "Discipline Lab", tagline: "Training arc: HR\u00a0→\u00a0AI" },
-  { id: "ai-lab", level: 4, name: "AI Lab", tagline: "Building at Lumofy" },
-  { id: "summit", level: 5, name: "The Summit", tagline: "Ride up & let’s\u00a0talk" },
+  { id: "base-camp", level: 1, name: "Base Camp", tagline: "Welcome to Sayed Jehad World", contents: "About me · player stats" },
+  { id: "bahrain", level: 2, name: "Bahrain", tagline: "Roots, heritage & first roles", contents: "Heritage · education · earlier roles" },
+  { id: "gym", level: 3, name: "Discipline Lab", tagline: "Training arc: HR\u00a0→\u00a0AI", contents: "Values · skills" },
+  { id: "ai-lab", level: 4, name: "AI Lab", tagline: "Building at Lumofy", contents: "Current role · projects · stack" },
+  { id: "summit", level: 5, name: "The Summit", tagline: "Ride up & let’s\u00a0talk", storyTagline: "The peak & let’s talk", contents: "Certificates · contact" },
 ] as const;
 
 export type ChapterId = (typeof chapters)[number]["id"];

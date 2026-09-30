@@ -10,7 +10,11 @@ import { useSyncExternalStore } from "react";
 type Nav = { goTo: (chapter: number, immediate?: boolean) => void };
 
 let chapter = 0;
-let checkpoints: number[] = [0, 0.25, 0.5, 0.75, 1];
+// where the world puts the five level starts (measured 30 Sep 2026: the same at every landscape size, because
+// the world is sized in screen heights), so the HUD draws its checkpoints in place before the world reports them
+let checkpoints: number[] = [0, 0.1355, 0.5583, 0.6916, 0.8159];
+/** the engine has reported its real checkpoints (the HUD shows its markers from then on) */
+let checkpointsLive = false;
 const subs = new Set<() => void>();
 const progressSubs = new Set<(p: number) => void>();
 let nav: Nav | null = null;
@@ -29,8 +33,10 @@ export const worldStore = {
   getChapter: () => chapter,
   /** Fraction (0..1) of the journey where each level starts, for the HUD markers. */
   setCheckpoints(c: number[]) {
-    if (c.length === checkpoints.length && c.every((v, i) => Math.abs(v - checkpoints[i]) < 1e-4)) return;
-    checkpoints = c;
+    const same = c.length === checkpoints.length && c.every((v, i) => Math.abs(v - checkpoints[i]) < 1e-4);
+    if (same && checkpointsLive) return;
+    checkpointsLive = true;
+    if (!same) checkpoints = c;
     emit();
   },
   setProgress(p: number) {
@@ -76,4 +82,8 @@ export function useChapter() {
 
 export function useCheckpoints() {
   return useSyncExternalStore(subscribe, () => checkpoints, () => checkpoints);
+}
+
+export function useCheckpointsLive() {
+  return useSyncExternalStore(subscribe, () => checkpointsLive, () => false);
 }

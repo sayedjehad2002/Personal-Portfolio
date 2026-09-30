@@ -27,7 +27,7 @@ test.describe("world mode on a laptop", () => {
   test("the very first paint is already the world (no loading or dark screen)", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     // the static opening shot is in the server HTML and shown by CSS alone
-    await expect(page.locator(".first-frame img")).toBeVisible({ timeout: 3_000 });
+    await expect(page.locator('.first-frame img[src*="base-camp"]')).toBeVisible({ timeout: 3_000 });
     await expect(page.locator(".first-frame")).toHaveCSS("display", "block");
   });
 

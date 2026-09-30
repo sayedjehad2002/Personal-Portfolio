@@ -13,8 +13,8 @@ export const PROPS: Record<string, PropMeta> = {
   ...GENERATED_PROPS,
   ...(GENERATED_PROPS["snow-drift"] ? { "snow-drift": { ...GENERATED_PROPS["snow-drift"], sink: 0.34 } } : {}),
   // the Bahrain heritage trail (drawn 30 Sep 2026)
-  "qalat-al-bahrain": { src: "/props/heritage/qalat-al-bahrain.svg", aspect: 660 / 250 },
-  "arad-fort": { src: "/props/heritage/arad-fort.svg", aspect: 408 / 230 },
+  "qalat-al-bahrain": { src: "/props/heritage/qalat-al-bahrain.svg", aspect: 640 / 267 },
+  "arad-fort": { src: "/props/heritage/arad-fort.svg", aspect: 393 / 193 },
   "tree-of-life": { src: "/props/heritage/tree-of-life.svg", aspect: 480 / 320 },
   "big-flag-pole": { src: "/props/heritage/big-flag-pole.svg", aspect: 64 / 576 },
 };
@@ -40,7 +40,7 @@ export const TILES = {
   // gym floor from y 694 (wall/floor junction); boots stand at 708
   groundGym: { src: "/tiles/ground-gym.webp", w: 616, h: 176, srcH: 870, surfaceY: 14, fallback: "#1f2633" } satisfies Tile,
   // office floor from the baseboard at y 725; boots stand at 766
-  groundOffice: { src: "/tiles/ground-office.webp", w: 216, h: 173, srcH: 898, surfaceY: 41, fallback: "#cfcbd6" } satisfies Tile,
+  groundOffice: { src: "/tiles/ground-office.webp", w: 216, h: 173, srcH: 898, surfaceY: 41, fallback: "#606687" } satisfies Tile,
   // glossy sea ice for skating the frozen Gulf: 640x150 tile rendered 0.2vh tall, walkable rim at y=6
   groundGulf: { src: "/tiles/frozen-gulf.svg", w: 640, h: 150, srcH: 750, surfaceY: 6, fallback: "linear-gradient(180deg, #ffffff 0 3px, #bfe9ff 3px, #7fd0f9 30%, #3fa8e8 70%, #1b6fb3)" } satisfies Tile,
   wallGym: { src: "/tiles/wall-gym.webp", w: 320, h: 694, srcH: 870, floorY: 694, fallback: "#2b3446" } satisfies Wall,
@@ -49,5 +49,6 @@ export const TILES = {
   farSkyline: { src: "/tiles/far-skyline.svg" },
   midHills: { src: "/tiles/mid-hills.svg" },
   frozenSea: { src: "/tiles/frozen-sea.svg" },
-  summitSign: { src: "/scenes/summit-sign.webp" },
+  // the summit sign redrawn as a vector (crisp at any size); sits in front of the player so he walks behind it
+  summitSign: { src: "/scenes/lettering/summit-sign.svg" },
 };

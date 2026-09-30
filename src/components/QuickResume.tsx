@@ -194,7 +194,7 @@ export function QuickResumeDialog({ open, onClose }: { open: boolean; onClose: (
         tabIndex={0}
         role="region"
         aria-label="Resume text"
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-6 focus-visible:shadow-[inset_0_0_0_3px_var(--color-ink),inset_0_0_0_6px_#fff] focus-visible:outline-none sm:px-6"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-6 focus-visible:shadow-none focus-visible:[outline-offset:-5px] sm:px-6"
         data-lenis-prevent
       >
         <ResumeText headingLevel={3} />

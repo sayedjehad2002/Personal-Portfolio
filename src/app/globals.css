@@ -61,6 +61,13 @@ body {
   outline-offset: 2px;
   box-shadow: 0 0 0 6px #ffffff;
 }
+/* links inside the small in-world notes: a tighter two-tone ring, so it doesn't cover the lines above and below */
+[data-world] a:focus-visible {
+  outline-width: 2px;
+  outline-offset: 1px;
+  border-radius: 3px;
+  box-shadow: 0 0 0 3px #ffffff;
+}
 
 .sr-only-focusable:not(:focus):not(:focus-within) {
   position: absolute;
@@ -479,8 +486,10 @@ body {
 }
 
 /* indoors (gym, lab) a cool rim light keeps the navy silhouette readable against the dark walls */
+/* indoors: a faint warm top light from the ceiling lamps separates him from the dark walls (a full white halo read
+   like a sticker outline) */
 [data-indoor="1"] > svg {
-  filter: drop-shadow(0 0 1.8px rgb(214 240 255 / 0.95)) drop-shadow(0 5px 9px rgb(4 20 45 / 0.35));
+  filter: drop-shadow(0 -1px 1.2px rgb(255 228 196 / 0.5)) drop-shadow(0 5px 9px rgb(4 20 45 / 0.4));
 }
 
 /* boot prints and skate marks left in the snow (world space, fade out) */
@@ -495,7 +504,6 @@ body {
   background: rgb(52 86 140 / 0.55);
   box-shadow: 0 1px 0 rgb(255 255 255 / 0.7);
   pointer-events: none;
-  will-change: opacity;
 }
 .footprint[data-kind="skate"] {
   width: clamp(26px, 4vh, 44px);
@@ -522,8 +530,11 @@ body {
     radial-gradient(45% 50% at 62% 45%, rgb(95 214 255 / 0.5), transparent 70%),
     radial-gradient(40% 45% at 85% 65%, rgb(186 140 255 / 0.35), transparent 70%);
   transform-origin: 50% 0%;
-  will-change: transform, opacity;
   animation: aurora 14s ease-in-out infinite alternate;
+}
+/* only while the high-altitude sky is showing */
+:not([data-on]) > .aurora {
+  animation: none;
 }
 .aurora-2 {
   animation-duration: 19s;
@@ -670,14 +681,33 @@ html[data-motion="off"]
     0 0 0.6em rgb(215 38 46 / 0.8);
 }
 
+/* the gym's quote: a slim neon tube sign mounted over the window */
+.neon-quote {
+  padding: 0.3em 0.9em 0.24em;
+  border: 2px solid #3b1216;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #151a28, #0c101b);
+  box-shadow:
+    0 0 0 1px #ff4d57 inset,
+    0 0 20px rgb(255 38 50 / 0.4),
+    0 3px 0 #05070c;
+  line-height: 1;
+}
+
 /* proof captions printed on the gym's posters and window (dark, like the poster paper) */
 .poster-caption {
-  border-radius: 6px;
-  background: rgb(16 21 34 / 0.92);
-  border: 1.5px solid rgb(255 255 255 / 0.18);
-  box-shadow: 0 0 0 1px rgb(215 38 46 / 0.55) inset;
-  color: #f3fbff;
+  /* printed on the poster: the poster's own panel colour and off-white ink, under a thin red rule */
+  border-radius: 2px;
+  background: #1e2436;
+  border-top: 2px solid #eb2f43;
+  color: #dbe4ef;
   font-weight: 700;
+}
+/* on the window glass: a small dark plate under NO EXCUSES */
+.poster-caption[data-glass] {
+  border-radius: 4px;
+  background: rgb(18 24 38 / 0.88);
+  color: #f3fbff;
 }
 
 /* skills as inventory items: a bevelled slot with a rarity glow (builder = ice blue, people = gold) */
@@ -920,4 +950,16 @@ html[data-motion="off"] .fx-prop {
   .first-frame {
     display: block;
   }
+  /* the phone / portrait opening (story mode) is the other case */
+  .story-first-frame {
+    display: none;
+  }
+}
+
+/* the how-to-play pill steps aside while a HUD level tooltip is showing under the bar */
+.how-to-play {
+  transition: opacity 0.15s;
+}
+body:has(nav[aria-label="Levels"] :is(button:hover, button:focus-visible)) .how-to-play {
+  opacity: 0;
 }

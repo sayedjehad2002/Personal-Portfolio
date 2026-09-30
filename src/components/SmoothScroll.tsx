@@ -35,7 +35,6 @@ export function SmoothScroll({ children }: { children: React.ReactNode }) {
       autoRaf: false,
       lerp: 0.14,
       wheelMultiplier: 0.9,
-      touchMultiplier: 1.4,
       smoothWheel: true,
       // a sideways trackpad swipe walks too (it is a side-scroller)
       gestureOrientation: "both",

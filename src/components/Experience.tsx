@@ -9,6 +9,7 @@ import { SmoothScroll } from "./SmoothScroll";
 import { Snow } from "./Snow";
 import { StoryMode } from "./story/StoryMode";
 import { FirstFrame } from "./world/FirstFrame";
+import { StoryFirstFrame } from "./story/StoryMode";
 import { WorldStage } from "./world/WorldStage";
 
 type Mode = "world" | "story";
@@ -53,6 +54,13 @@ export function Experience() {
     const t = setTimeout(() => setFirstGone(true), 350);
     return () => clearTimeout(t);
   }, [worldUp]);
+  // phones: the static level-1 opening stays until story mode has mounted under it
+  const [storyUp, setStoryUp] = useState(false);
+  useEffect(() => {
+    if (mode !== "story") return;
+    const t = setTimeout(() => setStoryUp(true), 60);
+    return () => clearTimeout(t);
+  }, [mode]);
   const first = useRef(true);
 
   useEffect(() => {
@@ -95,6 +103,7 @@ export function Experience() {
         {mode === "world" ? <WorldStage key="world" onReady={() => setWorldUp(true)} /> : mode === "story" ? <StoryMode /> : null}
       </main>
       {mode !== "story" && !firstGone && <FirstFrame leaving={worldUp} />}
+      {mode !== "world" && !storyUp && <StoryFirstFrame />}
       <Snow className="fixed inset-0 z-[55] h-full w-full" />
       <QuickResumeDialog open={quick} onClose={() => setQuick(false)} />
     </SmoothScroll>

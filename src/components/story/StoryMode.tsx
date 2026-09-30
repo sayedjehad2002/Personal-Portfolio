@@ -18,6 +18,7 @@ import {
 } from "@/data/resume";
 import { gsap, ScrollTrigger, useGSAP } from "@/lib/gsap";
 import { worldStore } from "@/lib/progress";
+import { LETTERING, SceneLettering } from "../world/lettering";
 import { Character, type CharacterHandle } from "../character/Character";
 import { scrollToY, useLenis } from "../SmoothScroll";
 import { snowControl } from "../Snow";
@@ -56,6 +57,9 @@ export function StoryMode({ introReady = true }: { introReady?: boolean }) {
       const phases = sections.map(() => 0);
       const facing = sections.map(() => 1 as 1 | -1);
       const landed = sections.map(() => false);
+      // the summit: 1 = hovering above the peak (hidden), 0 = landed; played as a real fall, not scrubbed
+      const drops = sections.map(() => ({ v: 1 }));
+      const landedAt = sections.map(() => -1);
       // art width and px per character unit, for a walk cycle locked to the distance travelled
       const sizes = sections.map(() => ({ art: 0, unit: 0 }));
       const measure = () =>
@@ -82,7 +86,14 @@ export function StoryMode({ introReady = true }: { introReady?: boolean }) {
         // Only animate avatars that are on or near the screen.
         ScrollTrigger.create({ trigger: sec, start: "top bottom+=200", end: "bottom top-=200", onToggle: (self) => (near[i] = self.isActive) });
         if (reduce) return;
-        if (i > 0) gsap.fromTo(walk[i], { p: 0 }, { p: 1, ease: "none", scrollTrigger: { trigger: sec, start: "top 85%", end: "top 25%", scrub: 0.6 } });
+        if (i > 0 && dropIn(i))
+          ScrollTrigger.create({
+            trigger: sec,
+            start: "top 60%",
+            onEnter: () => gsap.to(drops[i], { v: 0, duration: 0.55, ease: "power2.in", overwrite: true }),
+            onLeaveBack: () => gsap.to(drops[i], { v: 1, duration: 0.25, ease: "power1.out", overwrite: true }),
+          });
+        else if (i > 0) gsap.fromTo(walk[i], { p: 0 }, { p: 1, ease: "none", scrollTrigger: { trigger: sec, start: "top 85%", end: "top 25%", scrub: 0.6 } });
         // Cards stay in the accessibility tree (opacity only, never visibility:hidden).
         gsap.utils.toArray<HTMLElement>("[data-rise]", sec).forEach((el) => {
           gsap.from(el, {
@@ -121,11 +132,13 @@ export function StoryMode({ introReady = true }: { introReady?: boolean }) {
       const pose = (i: number, time: number, dt: number, moving: boolean, dir: number) => {
         if (dropIn(i)) {
           // falls onto the peak (facing the view), lands with a squash, then does the scene pose
-          const drop = 1 - Math.min(1, walk[i].p * 1.4);
+          const drop = drops[i].v;
           const touch = drop <= 0.001;
           const impact = touch && !landed[i] ? 0.8 : 0;
+          if (touch && !landed[i]) landedAt[i] = time;
           landed[i] = touch;
-          heroes.current[i]?.update({ state: touch ? (walk[i].p > 0.98 ? SCENES[i].pose : "idle") : "jump", phase: 0, facing: 1, air: drop * 160, time, dt, impact });
+          const settled = touch && time - landedAt[i] > 0.45;
+          heroes.current[i]?.update({ state: touch ? (settled ? SCENES[i].pose : "idle") : "jump", phase: 0, facing: 1, air: drop * 160, time, dt, impact });
           return;
         }
         if (moving) facing[i] = dir < 0 ? -1 : 1;
@@ -163,7 +176,7 @@ export function StoryMode({ introReady = true }: { introReady?: boolean }) {
         const dt = Math.min(0.05, deltaMs / 1000);
         for (let i = 0; i < sections.length; i++) {
           if (!near[i]) continue;
-          const p = walk[i].p;
+          const p = dropIn(i) ? 1 - drops[i].v : walk[i].p;
           const dp = last[i] < 0 ? 0 : p - last[i];
           const moving = Math.abs(dp) > 0.0004;
           if (p !== last[i]) {
@@ -171,8 +184,8 @@ export function StoryMode({ introReady = true }: { introReady?: boolean }) {
             const el = avatars[i];
             if (el) {
               if (dropIn(i)) {
-                el.style.setProperty("--drop", String(1 - Math.min(1, p * 1.4)));
-                el.style.opacity = String(Math.min(1, p * 10));
+                el.style.setProperty("--drop", String(drops[i].v));
+                el.style.opacity = drops[i].v < 0.999 ? "1" : "0";
               } else el.style.setProperty("--walk", String(p));
             }
           }
@@ -181,7 +194,11 @@ export function StoryMode({ introReady = true }: { introReady?: boolean }) {
         }
       };
       gsap.ticker.add(tick);
+      const preload = window.setTimeout(() => {
+        root.current?.querySelectorAll<HTMLImageElement>('img[loading="lazy"]').forEach((img) => (img.loading = "eager"));
+      }, 1500);
       return () => {
+        window.clearTimeout(preload);
         ScrollTrigger.removeEventListener("refresh", setMarks);
         gsap.ticker.remove(tick);
         window.removeEventListener("resize", measure);
@@ -213,10 +230,18 @@ export function StoryMode({ introReady = true }: { introReady?: boolean }) {
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={s.src} alt={s.alt} width={s.w} height={s.h} loading={i < 2 ? "eager" : "lazy"} className="block h-full w-full" />
+              {LETTERING[s.id] && <SceneLettering id={s.id} style={{ inset: 0 }} />}
               {s.id === "ai-lab" && (
                 <div aria-hidden="true" className="absolute grid grid-cols-2 gap-[3%]" style={{ left: "51%", top: "26%", width: "33%", height: "32%" }}>
                   {NOTE_COLOURS.map((c, k) => (
-                    <span key={c} className="rounded-[2px] shadow-sm" style={{ background: c, rotate: `${[-3, 2, 1.5, -2][k]}deg` }} />
+                    // each note carries its project's name (the details are in the cards below)
+                    <span
+                      key={c}
+                      className="grid place-items-center rounded-[2px] px-[6%] text-center font-display text-[clamp(7px,2.1vw,13px)] leading-[1.05] text-ink shadow-sm"
+                      style={{ background: c, rotate: `${[-3, 2, 1.5, -2][k]}deg` }}
+                    >
+                      {projects[k]?.name}
+                    </span>
                   ))}
                 </div>
               )}
@@ -253,19 +278,45 @@ export function StoryMode({ introReady = true }: { introReady?: boolean }) {
   );
 }
 
+/**
+ * The phone's opening screen, straight in the server HTML (level 1's header and painting), so a phone never shows
+ * a blank page while the scripts load. Story mode then takes over with the same layout: he walks in and the cards
+ * rise in as usual. CSS shows it only where story mode applies (see .story-first-frame).
+ */
+export function StoryFirstFrame() {
+  const s = SCENES[0];
+  const width = `min(100%, calc(64vh * ${s.w} / ${s.h}))`;
+  return (
+    <div aria-hidden="true" inert className="story-first-frame pointer-events-none fixed inset-0 z-[20] overflow-hidden bg-ink pt-[76px] text-ice-50">
+      <section className="bg-linear-to-b from-[#1aa6f2] to-[#8fd3ff]">
+        <div className="mx-auto" style={{ width }}>
+          <SceneHeader index={0} />
+        </div>
+        <div
+          className="relative mx-auto overflow-hidden md:rounded-2xl md:border-4 md:border-white/70 md:shadow-[0_24px_60px_-20px_rgba(4,20,45,0.6)]"
+          style={{ width, aspectRatio: `${s.w} / ${s.h}` }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={s.src} alt="" width={s.w} height={s.h} fetchPriority="high" className="block h-full w-full" />
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function SceneHeader({ index }: { index: number }) {
   const c = chapters[index];
   return (
-    <div className="flex items-end justify-between gap-3 px-4 pb-3 pt-8">
+    <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2 px-4 pb-3 pt-8">
       <div>
         <p className="mb-1 inline-block rounded-md bg-ink/75 px-2 py-0.5">
           <Px className="text-[12px] text-gold">{`Level ${c.level}`}</Px>
         </p>
-        <h2 id={`lvl-${c.id}`} className="font-display text-[34px] leading-none tracking-wide text-white text-outline">
+        <h2 id={`lvl-${c.id}`} className="font-display text-[34px] leading-none tracking-wide whitespace-nowrap text-white text-outline">
           {c.name}
         </h2>
       </div>
-      <p className="max-w-[52%] rounded-lg bg-ink/70 px-2.5 py-1 text-right text-sm font-bold text-balance text-white">{c.tagline}</p>
+      <p className="max-w-[52%] rounded-lg bg-ink/70 px-2.5 py-1 text-sm font-bold text-balance text-white">{"storyTagline" in c ? c.storyTagline : c.tagline}</p>
     </div>
   );
 }
@@ -279,7 +330,7 @@ function Card({ children, tone = "frost", className = "" }: { children: ReactNod
 }
 
 const HERITAGE_ART: Record<string, string> = {
-  qalat: "/props/heritage/qalat-al-bahrain.svg",
+  qalat: "/props/heritage/qalat-al-bahrain.svg#thumb",
   arad: "/props/heritage/arad-fort.svg",
   tree: "/props/heritage/tree-of-life.svg",
 };
@@ -454,7 +505,7 @@ function LevelContent({ index }: { index: number }) {
                 <h3 className="font-display text-xl leading-tight tracking-wide">{p.name}</h3>
                 <p className="mt-0.5 text-sm leading-snug text-ink/85">{p.blurb}</p>
                 {p.href && (
-                  <a href={p.href} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm font-extrabold text-[#1d3f8f] underline decoration-2 underline-offset-2">
+                  <a href={p.href} target="_blank" rel="noreferrer" className="mt-1 inline-flex min-h-11 items-center gap-1 text-sm font-extrabold text-[#1d3f8f] underline decoration-2 underline-offset-2">
                     {p.hrefLabel} <Icon name="arrow-up-right" className="size-3.5" />
                   </a>
                 )}
@@ -477,22 +528,6 @@ function LevelContent({ index }: { index: number }) {
     case 4:
       return (
         <>
-          <Card tone="night">
-            <h3 className="flex items-center gap-2 font-display text-2xl tracking-wide text-white">
-              <Icon name="trophy" className="size-5 text-gold" /> Certificates on the way up
-            </h3>
-            <ul className="mt-3 grid gap-2">
-              {certificates.map((c) => (
-                <li key={c.name} className="flex items-start gap-2.5 rounded-xl border border-gold/25 bg-gold/5 px-3 py-2">
-                  <Icon name="medal" weight="fill" className="mt-0.5 size-5 shrink-0 text-gold" />
-                  <div className="leading-tight">
-                    <p className="text-sm font-bold text-ice-50">{c.name}</p>
-                    <p className="text-xs text-ice-100/80">{[c.issuer, c.year].filter(Boolean).join(" · ")}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </Card>
           <Card>
             <Px className="text-[12px] text-[#0c69ad]">Level 5 · Complete</Px>
             <h3 className="mt-1 font-display text-4xl leading-[0.95] tracking-wide text-ink">You reached the top!</h3>
@@ -509,6 +544,22 @@ function LevelContent({ index }: { index: number }) {
               </a>
             </div>
             <p className="mt-3 text-center text-sm font-semibold text-ink/75">{profile.email}</p>
+          </Card>
+          <Card tone="night">
+            <h3 className="flex items-center gap-2 font-display text-2xl tracking-wide text-white">
+              <Icon name="trophy" className="size-5 text-gold" /> Certificates on the way up
+            </h3>
+            <ul className="mt-3 grid gap-2">
+              {certificates.map((c) => (
+                <li key={c.name} className="flex items-start gap-2.5 rounded-xl border border-gold/25 bg-gold/5 px-3 py-2">
+                  <Icon name="medal" weight="fill" className="mt-0.5 size-5 shrink-0 text-gold" />
+                  <div className="leading-tight">
+                    <p className="text-sm font-bold text-ice-50">{c.name}</p>
+                    <p className="text-xs text-ice-100/80">{[c.issuer, c.year].filter(Boolean).join(" · ")}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </Card>
         </>
       );

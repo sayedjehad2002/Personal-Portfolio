@@ -21,7 +21,11 @@ export function WheelHint() {
         <span className="mx-2 text-ice-200/60">·</span>
         <kbd className="rounded border border-white/40 px-1 font-sans text-[11px]">↑</kbd> jump
       </span>
-      <span className="hidden pointer-coarse:inline">Swipe left or up to walk</span>
+      <span className="hidden pointer-coarse:inline">
+        Swipe left or up to walk
+        <span className="mx-2 text-ice-200/60">·</span>
+        tap Sayed to jump
+      </span>
     </div>
   );
 }

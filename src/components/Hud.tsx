@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { chapters, profile } from "@/data/resume";
 import { motion, useMotionPaused } from "@/lib/motion";
-import { useChapter, useCheckpoints, worldStore } from "@/lib/progress";
+import { useChapter, useCheckpoints, useCheckpointsLive, worldStore } from "@/lib/progress";
 import { sfx, useSoundOn } from "@/lib/sfx";
 import { Icon } from "./ui/Icon";
 
@@ -51,6 +51,7 @@ function toTrail(p: number, marks: number[], shown: number[]) {
 export function Hud() {
   const chapter = useChapter();
   const marks = useCheckpoints();
+  const marksLive = useCheckpointsLive();
   const sound = useSoundOn();
   const still = useMotionPaused();
   const trail = useRef<HTMLDivElement>(null);
@@ -104,9 +105,14 @@ export function Hud() {
           className="flex shrink-0 items-center gap-2.5 rounded-xl pr-1 text-left"
           aria-label={`${profile.shortName} World, back to the start`}
         >
-          <span className="grid size-11 place-items-center rounded-xl border-2 border-white bg-linear-to-b from-ice-500 to-ice-600 font-display text-lg text-white shadow-[0_3px_0_#0a5a94]">
-            SJ
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/sayed-avatar.webp"
+            alt=""
+            width={44}
+            height={44}
+            className="size-11 shrink-0 rounded-xl border-2 border-white bg-ice-600 object-cover shadow-[0_3px_0_#0a5a94]"
+          />
           {/* fixed width, so the trail never jumps sideways when the level name changes */}
           <span className="hidden w-[12.75rem] leading-tight md:block" aria-hidden="true">
             <span className="block font-display text-[15px] tracking-wide">{profile.shortName} World</span>
@@ -123,6 +129,8 @@ export function Hud() {
           onPointerOver={() => tipsOff && setTipsOff(false)}
           onFocus={() => tipsOff && setTipsOff(false)}
         >
+          {/* very narrow phones: no room for five checkpoints, so the level's name sits over a plain progress bar */}
+          <p aria-hidden="true" className="mb-1 hidden truncate text-[12px] font-extrabold text-ice-100 max-[400px]:block">{c.name}</p>
           <div ref={trail} className="relative h-2.5 rounded-full bg-white/15">
             <div ref={fill} className="absolute inset-y-0 left-0 rounded-full bg-linear-to-r from-ice-300 via-ice-200 to-white" style={{ width: "0%" }} />
             <div
@@ -132,27 +140,29 @@ export function Hud() {
               style={{ left: "0%" }}
             />
           </div>
-          <ol className="absolute inset-x-0 top-1/2 z-10 -translate-y-1/2">
+          {/* the markers fade in once the world (or story mode) has placed them, so they never jump at load */}
+          <ol className={`absolute inset-x-0 top-1/2 z-10 -translate-y-1/2 transition-opacity duration-300 max-[400px]:hidden ${marksLive ? "opacity-100" : "opacity-0"}`}>
             {chapters.map((ch, i) => (
               <li key={ch.id} className="absolute -translate-x-1/2" style={{ left: `${((shown[i] ?? i / (chapters.length - 1)) * 100).toFixed(2)}%` }}>
                 <button
                   type="button"
                   data-hud-level={i}
                   onClick={() => worldStore.goTo(i)}
-                  aria-label={`Go to level ${ch.level}: ${ch.name}`}
+                  aria-label={`Go to level ${ch.level}: ${ch.name} (${ch.contents})`}
                   aria-current={i === chapter ? "step" : undefined}
-                  className={`group relative grid size-7 -translate-y-1/2 place-items-center rounded-lg border-2 font-display text-[13px] transition-all duration-200 before:absolute before:-inset-2 before:content-[''] hover:scale-110 ${
+                  className={`group relative grid size-6 -translate-y-1/2 place-items-center rounded-lg border-2 font-display text-[12px] sm:size-7 sm:text-[13px] transition-all duration-200 before:absolute before:-inset-2 before:content-[''] hover:scale-110 ${
                     i <= chapter ? "border-white bg-ice-600 text-white" : "border-white/50 bg-ink-2 text-ice-100"
                   } ${i === chapter ? "scale-110 shadow-[0_0_0_3px_rgba(143,211,255,0.45)]" : ""}`}
                 >
                   {i === chapters.length - 1 ? <Icon name="flag" weight="fill" className="size-3.5" /> : ch.level}
                   <span
                     aria-hidden="true"
-                    className={`absolute top-[calc(100%+8px)] hidden whitespace-nowrap rounded-md bg-ink px-2 py-1 text-[12px] font-bold text-ice-50 opacity-0 transition-opacity lg:block ${
+                    className={`absolute top-[calc(100%+22px)] left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-white/25 bg-ink px-2.5 py-1 text-center shadow-lg text-[12px] font-bold text-ice-50 opacity-0 transition-opacity lg:block ${
                       tipsOff ? "" : "group-hover:opacity-100 group-focus-visible:opacity-100"
                     }`}
                   >
                     {ch.name}
+                    <span className="block font-sans text-[11px] font-semibold text-ice-200">{ch.contents}</span>
                   </span>
                 </button>
               </li>
@@ -167,7 +177,8 @@ export function Hud() {
             aria-pressed={still}
             aria-label="Pause animations"
             title={still ? "Play the ambient animations" : "Pause the ambient animations"}
-            className={iconBtn}
+            // on phones too (WCAG 2.2.2): the snowfall and ambient loops run there as well
+            className={iconBtn.replace("hidden ", "grid ").replace(" sm:grid", "")}
           >
             <Icon name={still ? "play" : "pause"} weight="fill" className="size-4" />
           </button>

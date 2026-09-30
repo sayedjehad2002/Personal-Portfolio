@@ -1,8 +1,10 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { forwardRef, memo, type CSSProperties, type RefObject } from "react";
+import { forwardRef, Fragment, memo, type CSSProperties, type RefObject } from "react";
 import { PROPS, TILES } from "./assets";
+import { LETTERING, SceneLettering, START_SIGN, WORLD_SKIP } from "./lettering";
+import { StartSign } from "./StartSign";
 import { DoorFacade } from "./props";
 import { CABIN, type Placement, type World, type Zone } from "./spec";
 
@@ -38,7 +40,15 @@ const CLOUD_SEA =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 120'%3E%3Cpath d='M0 120 L0 58 Q20 30 52 40 Q70 12 104 26 Q130 4 160 26 Q186 14 206 34 Q236 10 268 30 Q296 18 314 38 Q346 20 372 42 Q392 36 400 58 L400 120 Z' fill='%23ffffff'/%3E%3Cpath d='M0 120 L0 84 Q60 66 120 80 Q200 60 280 82 Q340 70 400 84 L400 120 Z' fill='%23e3f3ff'/%3E%3C/svg%3E\")";
 
 /** Sky and the slow parallax layers behind the world (they move on x and y). */
-export const Backdrop = memo(function Backdrop({ world: W, altitudeRef }: { world: World; altitudeRef: RefObject<HTMLDivElement | null> }) {
+export const Backdrop = memo(function Backdrop({
+  world: W,
+  altitudeRef,
+  warmRef,
+}: {
+  world: World;
+  altitudeRef: RefObject<HTMLDivElement | null>;
+  warmRef?: RefObject<HTMLDivElement | null>;
+}) {
   const R = W.ride;
   const all = { a: W.worldX0, b: W.worldX1 };
   const forest = rangeOf(W, (z) => z.level === 0);
@@ -178,6 +188,16 @@ export const Backdrop = memo(function Backdrop({ world: W, altitudeRef }: { worl
           </div>
         </div>
       </div>
+
+      {/* late-afternoon light over the frozen Gulf: the years pass on the ice and the sky warms (opacity set per frame) */}
+      <div
+        ref={warmRef}
+        className="absolute inset-0"
+        style={{
+          opacity: 0,
+          background: "linear-gradient(180deg, rgb(255 150 120 / 0) 0%, rgb(255 168 128 / 0.16) 38%, rgb(255 190 140 / 0.42) 72%, rgb(255 214 168 / 0.5) 100%)",
+        }}
+      />
 
       {/* clouds (they sink below you as you climb) */}
       <div data-parallax="0.55" className="absolute left-0 top-0 h-0 w-0 will-change-transform">
@@ -387,19 +407,64 @@ function HoloCode({ left, top, w, h }: { left: number; top: number; w: number; h
   );
 }
 
-/** The mountainside under the cable, drawn as one big snowy polygon with rock strata. */
+/**
+ * The Ice Mountain's flank under the cable, drawn in the summit painting's language: dark slate rock with lighter
+ * facets, a jagged ridge under a thick, uneven snow blanket, and snow patches lower down. Seeded, so it is the
+ * same on every visit.
+ */
 function Mountain({ W }: { W: World }) {
   const R = W.ride;
+  const u = W.u;
   const pts = R.slope;
+  const rnd = (i: number) => {
+    const v = Math.sin(i * 127.1 + 311.7) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  // the ridge: the slope polyline with a rocky jitter (flat ground at the valley station stays flat)
+  const crest: [number, number][] = [];
+  let k = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [x0, y0] = pts[i];
+    const [x1, y1] = pts[i + 1];
+    const n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / (u * 0.085)));
+    const flat = Math.abs(y1 - y0) < 1;
+    for (let j = 0; j < n; j++) {
+      const t = j / n;
+      const jit = flat || (i === 0 && j === 0) ? 0 : (rnd(k++) - 0.5) * u * 0.03;
+      crest.push([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t + jit]);
+    }
+  }
+  crest.push(pts[pts.length - 1]);
   const minX = pts[0][0];
   const maxX = pts[pts.length - 1][0];
-  const minY = Math.min(...pts.map((p) => p[1])) - 4;
+  const minY = Math.min(...crest.map((p) => p[1])) - u * 0.03;
   const maxY = R.by + W.vh * 0.5;
-  const P = (x: number, y: number) => `${(x - minX).toFixed(1)} ${(y - minY).toFixed(1)}`;
-  const top = pts.map(([x, y]) => P(x, y)).join(" L ");
-  const shade = (dy: number) => pts.map(([x, y]) => P(x, y + dy)).join(" L ");
+  const P = ([x, y]: [number, number]) => `${(x - minX).toFixed(1)} ${(y - minY).toFixed(1)}`;
   const w = maxX - minX;
   const h = maxY - minY;
+  // snow blanket: from the ridge down to a scalloped lower edge
+  const lower = crest.map(([x, y], i): [number, number] => [x, y + u * (0.05 + 0.045 * rnd(900 + i) + (i % 3 === 0 ? 0.02 : 0))]);
+  const snowPath = `M ${crest.map(P).join(" L ")} L ${[...lower].reverse().map(P).join(" L ")} Z`;
+  const shadePath = `M ${lower.map(([x, y]) => P([x, y - u * 0.018])).join(" L ")} L ${[...lower].reverse().map(P).join(" L ")} Z`;
+  // rock facets and snow patches on the sloped part, below the blanket
+  const sloped = crest.filter((_, i) => i > 0 && crest[i][1] < crest[i - 1][1] - 0.5);
+  const facets = sloped
+    .filter((_, i) => i % 2 === 0)
+    .map(([x, y], i) => {
+      const d = u * (0.14 + 0.32 * rnd(300 + i));
+      const fw = u * (0.14 + 0.2 * rnd(400 + i));
+      const fh = u * (0.012 + 0.022 * rnd(500 + i)); // thin strata streaks along the flank
+      const slant = fw * 0.78; // follows the 38° flank
+      const cx = x + u * 0.06 * (rnd(600 + i) - 0.5);
+      const cy = y + d;
+      const q: [number, number][] = [
+        [cx, cy],
+        [cx + fw, cy - slant],
+        [cx + fw + fh * 0.4, cy - slant + fh],
+        [cx + fh * 0.3, cy + fh * 1.1],
+      ];
+      return { d: `M ${q.map(P).join(" L ")} Z`, light: rnd(700 + i) > 0.45, snow: rnd(800 + i) > 0.84, cx: cx + fw * 0.5, cy: cy - slant * 0.5, rx: fw * 0.36, ry: u * (0.01 + 0.008 * rnd(850 + i)) };
+    });
   return (
     <svg
       aria-hidden="true"
@@ -410,19 +475,27 @@ function Mountain({ W }: { W: World }) {
     >
       <defs>
         <linearGradient id="mtn" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#dff1ff" />
-          <stop offset="0.35" stopColor="#b9dcf5" />
-          <stop offset="1" stopColor="#7fa6d6" />
+          <stop offset="0" stopColor="#56699a" />
+          <stop offset="0.3" stopColor="#3d4c78" />
+          <stop offset="1" stopColor="#252f4d" />
         </linearGradient>
       </defs>
-      <path d={`M ${top} L ${P(maxX, maxY)} L ${P(minX, maxY)} Z`} fill="url(#mtn)" />
-      {/* rock strata following the slope */}
-      {[0.12, 0.3, 0.52].map((k, i) => (
-        <path key={i} d={`M ${shade(W.u * k)}`} fill="none" stroke={i % 2 ? "#6f8fbf" : "#8aa9d3"} strokeWidth={W.u * (0.03 - i * 0.006)} strokeLinecap="round" opacity={0.55} />
-      ))}
-      {/* the snow crest */}
-      <path d={`M ${top}`} fill="none" stroke="#ffffff" strokeWidth={W.u * 0.03} strokeLinejoin="round" />
-      <path d={`M ${shade(W.u * 0.018)}`} fill="none" stroke="#9fd0f2" strokeWidth={W.u * 0.008} opacity={0.8} />
+      <path d={`M ${crest.map(P).join(" L ")} L ${P([maxX, maxY])} L ${P([minX, maxY])} Z`} fill="url(#mtn)" />
+      {facets.map((f, i) =>
+        f.snow ? (
+          // a drift of snow caught on a ledge, lying along the flank
+          <g key={i} transform={`rotate(-38 ${(f.cx - minX).toFixed(1)} ${(f.cy - minY).toFixed(1)})`}>
+            <ellipse cx={f.cx - minX} cy={f.cy - minY} rx={f.rx} ry={f.ry} fill="#f4faff" />
+            <ellipse cx={f.cx - minX} cy={f.cy - minY + f.ry * 0.45} rx={f.rx * 0.9} ry={f.ry * 0.45} fill="#cfe6fa" />
+          </g>
+        ) : (
+          <path key={i} d={f.d} fill={f.light ? "#7c8ebb" : "#1a2139"} opacity={f.light ? 0.4 : 0.4} />
+        ),
+      )}
+      {/* the snow blanket over the ridge, shaded blue on its underside, with a dark ink edge like the props */}
+      <path d={snowPath} fill="#ffffff" />
+      <path d={shadePath} fill="#cfe6fa" />
+      <path d={`M ${crest.map(P).join(" L ")}`} fill="none" stroke="#1f2d4d" strokeWidth={Math.max(2, u * 0.004)} strokeLinejoin="round" opacity={0.6} />
     </svg>
   );
 }
@@ -558,29 +631,45 @@ export const WorldArt = memo(function WorldArt({ world: W, layer }: { world: Wor
           const mask =
             fl || fr || a > 0 || b < s.w ? `linear-gradient(90deg, transparent ${a}px, #000 ${a + fl}px, #000 ${b - fr}px, transparent ${b}px)` : undefined;
           return (
-            <img
-              key={s.id}
-              src={s.src}
-              alt={s.alt}
-              width={Math.round(s.w)}
-              height={Math.round(s.h)}
-              draggable={false}
-              decoding="async"
-              className="absolute max-w-none select-none"
-              style={{ left: s.x, top: s.y, width: s.w, height: s.h, WebkitMaskImage: mask, maskImage: mask }}
-            />
+            <Fragment key={s.id}>
+              <img
+                src={s.src}
+                alt={s.alt}
+                width={Math.round(s.w)}
+                height={Math.round(s.h)}
+                draggable={false}
+                decoding="async"
+                className="absolute max-w-none select-none"
+                style={{ left: s.x, top: s.y, width: s.w, height: s.h, WebkitMaskImage: mask, maskImage: mask }}
+              />
+              {/* crisp vector lettering over the painted words (shown once the painting has decoded) */}
+              {LETTERING[s.id] && !WORLD_SKIP.has(s.id) && <SceneLettering id={s.id} style={{ left: s.x, top: s.y, width: s.w, height: s.h }} />}
+              {/* the start sign is erased from the painting and drawn here as vector art (always on, it is the sign) */}
+              {s.id === "base" && (
+                <StartSign
+                  aria-hidden="true"
+                  focusable="false"
+                  className="pointer-events-none absolute"
+                  style={{ left: s.x + START_SIGN.x0 * s.w, top: s.y + START_SIGN.y0 * s.h, width: START_SIGN.w * s.w, height: START_SIGN.h * s.h }}
+                />
+              )}
+            </Fragment>
           );
         })}
 
         <SceneFx W={W} />
 
-        {W.props.filter((p) => p.layer === "back").map((p, i) => (
+        {W.props.filter((p) => p.layer === "back" && !p.name.startsWith("station-")).map((p, i) => (
           <PropImg key={`b${i}`} p={p} />
         ))}
         {R.pylons.map((p, i) => (
           <Pylon key={i} W={W} {...p} />
         ))}
         <CableLine W={W} />
+        {/* the two stations stand in front of the rope: it runs into them (the parked car hangs from their wheel) */}
+        {W.props.filter((p) => p.layer === "back" && p.name.startsWith("station-")).map((p, i) => (
+          <PropImg key={`s${i}`} p={p} />
+        ))}
       </>
     );
   }
