@@ -1,0 +1,8 @@
+# Reference material only: Robby Leonardi's original site and Sayed's raw source art.
+/Resume_Robby-Leonardi-master
+# Dev-only sprite reference used by /lab (the page is a 404 in production).
+/public/_ref
+/test-results
+/playwright-report
+/tests
+/.next-prod

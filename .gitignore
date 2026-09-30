@@ -1,0 +1,29 @@
+# deps
+/node_modules
+
+# next
+/.next/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# env
+.env*
+!.env.example
+
+# misc
+.DS_Store
+*.log
+.vercel
+
+# Reference material only (Robby Leonardi's original site + raw source art).
+# Processed assets live in /public.
+/Resume_Robby-Leonardi-master/
+
+# Playwright
+/test-results/
+/playwright-report/
+/.next-prod/
+
+# local tooling
+/.claude/
