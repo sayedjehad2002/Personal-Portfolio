@@ -554,7 +554,9 @@ export function WorldStage({ onReady }: { onReady?: () => void }) {
         // cold breath while standing still outside
         if (outdoor && still > 0.9 && time > nextBreath && body.onGround) {
           nextBreath = time + 2.4 + (Math.sin(time * 7.1) + 1) * 0.4;
-          snowControl.breath(W.cx + facing * 44 * W.unit, screenY - 104 * W.unit, facing);
+          // from his mouth: he only breathes like this standing still, in the 3/4 view, where the lips sit at
+          // about (79.5, 72.8) in the avatar's viewBox (centre x 60, soles y 180), mirrored when facing left
+          snowControl.breath(W.cx + facing * 19.5 * W.unit, screenY - 107 * W.unit, facing);
         }
 
         // the lift bell rings as the cabin leaves and as it docks
