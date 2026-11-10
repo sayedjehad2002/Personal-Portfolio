@@ -783,10 +783,14 @@ function Scene({ sim, small, quality }: { sim: Sim; small: boolean; quality: num
     const aheadTo = quiet ? 0 : Math.max(-1, Math.min(1, speed * 0.085)) * Math.min(1.15, visW * 0.065);
     st.ahead += (aheadTo - st.ahead) * Math.min(1, dt * (Math.abs(aheadTo) > Math.abs(st.ahead) ? 1.8 : 1.1));
     sim.camX = x + ((0.5 - playerAt) * visW) / sim.zoom - Math.min(7.5, visW * 0.3) * fin + st.ahead * (1 - fin);
+    // on an upright screen the dragon is out of the picture when he stands at the top, so while it wakes the
+    // camera goes over to it (the eye, the roar, the fire) and comes back to him for the hatchling and the card
+    const toDragon = narrow && wakeT >= 0 ? smooth((wakeT - 0.3) / 1.0) * (1 - smooth((wakeT - 4.9) / 1.0)) : 0;
+    sim.camX += (264.6 - sim.camX) * toDragon;
     sim.heroPx = (x - sim.camX) * u * sim.zoom + vw / 2;
     const camDx = quiet ? 0 : sim.camX - st.prevCamX;
     st.prevCamX = sim.camX;
-    cam.position.set(sim.camX, CAM_Y + sim.camY + st.shake * 0.12, dist);
+    cam.position.set(sim.camX, CAM_Y + sim.camY + st.shake * 0.12 - 1.2 * toDragon, dist);
     cam.rotation.set(0, 0, 0);
     const pe = cam.projectionMatrix.elements;
     if (Math.abs(pe[9] - 2 * SHIFT) > 1e-6) {
