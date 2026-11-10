@@ -10,7 +10,7 @@ const browser = await chromium.launch({ channel: process.env.QA_CHANNEL || "msed
 async function open(width, height, scale, phone) {
   const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: scale, hasTouch: phone, isMobile: phone });
   await page.goto(url, { waitUntil: "load" });
-  await page.waitForFunction(() => window.__world && window.__world.stats().frames > 60 && window.__world.sim.qa.loaded.includes("desert"), null, { timeout: 120000 });
+  await page.waitForFunction(() => window.__world && window.__world.stats().frames > 60 && window.__world.sim.qa.revealed, null, { timeout: 120000 });
   return page;
 }
 // only the sky and the 3D picture: the HUD, the cards and the titles are drawn by the page over the shot

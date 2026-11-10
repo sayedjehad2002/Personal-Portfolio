@@ -100,7 +100,7 @@ def export(folder):
     for i, x in enumerate(stops):
         pa.oyster((x, 0.85, bed(x) + 0.02), rad(180 + (20, -15, 10)[i % 3]), 1.2)
 
-    live = [_fish('FishGold', '#FFD166', 0.85), _fish('FishBlue', '#7FC8EA', 1.2),
+    live = [_fish('FishGold', '#FFD166', 1.0), _fish('FishBlue', '#7FC8EA', 1.3), _fish('FishCoral', '#FF8A4C', 1.1),
             la.turtle((80.0, 1.3, BED + 3.0), 0.0, 1.5), la.ray((96.0, 0.6, BED + 0.5), rad(180), 1.3),
             la.hamour((101.4, 2.2, BED + 0.95), rad(-160), 1.0), la.dugong((120.0, 26.0, BED + 2.2), rad(180), 2.6, mix('#8FA3AE', DEEP, 0.55))]
     live += [la.jellyfish((x, 4.0, BED + z), s, '#F7A8C4', int(x)) for x, z, s in ((77.0, 2.6, 1.3), (89.0, 2.2, 1.0), (104.0, 2.7, 1.4), (110.5, 2.0, 0.9))]

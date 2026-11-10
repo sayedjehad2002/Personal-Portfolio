@@ -15,7 +15,7 @@ import gamekit as gk
 import levelkit as lk
 
 GROUND, HAZE = '#2E2632', '#6E2A22'
-BODY, BELLY, DARK, BONE, WING = '#A2322D', '#E4A86C', '#5E1D22', '#EFDDBA', '#6E2129'
+BODY, BELLY, DARK, BONE, WING, EMBER = '#8A1E1E', '#C9783C', '#2E0D12', '#EADBB8', '#45121A', '#FF6A1F'
 X0, X1 = lk.MAGMA
 
 # the dragon's spine on the walk plane: x, height of its centre, radius
@@ -26,6 +26,10 @@ LEDGE, PEAK = (265.2, 271.2, 8.3), (271.2, 274.8, 9.4)   # x0, x1, top: the nest
 
 
 def _dragon():
+    """A scarier dragon: dark armour plates with fire glowing in the seams, two rows of spines, heavy claws, a torn
+    wing, and a head with an angry brow, long horns and fangs. The head has moving parts for when it wakes: the
+    eyelids (Dragon.lid) open over a burning eye and the lower jaw (Dragon.jaw) drops. Its top line is unchanged,
+    because he walks on it."""
     R = root('Dragon')
     pts, rr = spline([(x, 0.0, z) for x, z, _ in SPINE], [r for _, _, r in SPINE], 96)
     g = G('dragon')
@@ -33,53 +37,106 @@ def _dragon():
     n = len(pts)
     for i in range(n):
         p, r = pts[i], rr[i]
+        tan = (pts[min(i + 1, n - 1)] - pts[max(i - 1, 0)]).normalized()
         if r > 0.3:
             g(BELLY).ball(p + Vector((0, -0.22 * r, -0.5 * r)), 0.6 * r, seg=16, rings=9)
-        # one row of spines just behind the line he walks, so they never hide him
-        if r > 0.12 and i % 3 == 1 and i < n - 4:
-            tan = (pts[min(i + 1, n - 1)] - pts[max(i - 1, 0)]).normalized()
-            base = p + Vector((0, 0.6 * r, 0.76 * r))
-            h = 0.5 * r + 0.14
-            g(BONE).cone(base, base + Vector((0, 0.1 * r, h)) - tan * (h * 0.4), 0.22 * r + 0.035, 0.0, seg=8)
-    limb = mix(BODY, '#000000', 0.12)
+            # armour: dark overlapping plates down the flank that faces the camera, fire showing in the seams
+            if i % 2 == 0:
+                g(DARK).ball(p + Vector((0, -0.8 * r, 0.22 * r)), (0.34 * r + 0.08, 0.13 * r, 0.46 * r), rot=(0.25, 0, 0), seg=12, rings=8)
+            if i % 4 == 1:
+                g(EMBER, emit=2.6).ball(p + Vector((0, -0.9 * r, -0.06 * r)), (0.2 * r + 0.04, 0.05 * r, 0.05 * r + 0.02), seg=8, rings=6)
+        if r > 0.12 and i < n - 4:
+            if i % 3 == 1:
+                # the tall row just behind the line he walks, so the spines never hide him
+                base = p + Vector((0, 0.6 * r, 0.76 * r))
+                h = 0.78 * r + 0.2
+                g(BONE).cone(base, base + Vector((0, 0.12 * r, h)) - tan * (h * 0.45), 0.24 * r + 0.04, 0.0, seg=8)
+                g(DARK).cone(base, base + Vector((0, 0.03 * r, h * 0.3)) - tan * (h * 0.1), 0.3 * r + 0.05, 0.2 * r + 0.03, seg=8)
+            if i % 3 == 2 and r > 0.4:
+                # a lower row out of the flank, below his feet
+                base = p + Vector((0, -0.72 * r, 0.5 * r))
+                h = 0.34 * r + 0.1
+                g(BONE).cone(base, base + Vector((0, -0.75 * h, 0.7 * h)) - tan * (h * 0.5), 0.13 * r + 0.03, 0.0, seg=7)
+    # a spiked tail tip, on the far side of where he steps on
+    for k in range(4):
+        tp, tr = pts[4 + k * 3], rr[4 + k * 3]
+        g(BONE).cone(tp + Vector((0, 0.5 * tr + 0.05, 0.3 * tr)), tp + Vector((-0.25, 0.9 * tr + 0.5, 0.55 + tr)), 0.07 + 0.2 * tr, 0.0, seg=7)
+    limb = mix(BODY, '#000000', 0.22)
     for (tx, tz, ts), (px, pz) in (((243.5, 1.35, 1.0), (247.0, 0.3)), ((254.2, 1.9, 0.75), (257.0, 0.3))):
         g(limb).ball((tx, -1.55, tz), (1.8 * ts, 0.95 * ts, 1.45 * ts))
+        g(DARK).ball((tx - 0.2, -2.3, tz + 0.25), (1.2 * ts, 0.25 * ts, 0.9 * ts), seg=12, rings=8)
+        g(BONE).cone((tx - 1.3 * ts, -1.9, tz + 0.5 * ts), (tx - 2.0 * ts, -2.2, tz + 1.15 * ts), 0.2 * ts, 0.0, seg=7)
         g(limb).chain([(tx + 0.9, -2.0, tz * 0.6), (px - 0.6, -2.35, 0.5)], [0.62 * ts, 0.44 * ts], seg=14)
-        g(limb).ball((px, -2.4, pz), (0.62 * ts, 0.46 * ts, 0.3 * ts))
-        for k in (-1, 0, 1):
-            g(BONE).cone((px + 0.4, -2.4 + 0.24 * k, 0.2), (px + 0.95, -2.4 + 0.3 * k, 0.07), 0.14 * ts, 0.0, seg=8)
-    # folded wing along the flank that faces the camera, kept below his path
+        g(limb).ball((px, -2.4, pz), (0.66 * ts, 0.5 * ts, 0.32 * ts))
+        for k in (-1.5, -0.5, 0.5, 1.5):
+            g(BONE).chain([(px + 0.4, -2.4 + 0.2 * k, 0.26), (px + 0.95, -2.4 + 0.27 * k, 0.3), (px + 1.35, -2.4 + 0.3 * k, 0.03)], [0.13 * ts, 0.1 * ts, 0.01], seg=7, n=6)
+    # the wing folded along the flank that faces the camera, kept below his path: torn at the edge, with a hook at the wrist
     W0, W1, W2 = Vector((253.0, -2.0, 3.9)), Vector((249.0, -2.3, 3.6)), Vector((246.0, -2.25, 3.0))
-    F = [Vector((241.5, -1.75, 2.2)), Vector((242.5, -1.95, 1.5)), Vector((245.0, -2.25, 1.2)), Vector((249.0, -2.35, 1.6))]
+    F = [Vector((240.6, -1.7, 2.5)), Vector((241.4, -1.9, 1.75)), Vector((243.0, -2.1, 1.05)), Vector((245.4, -2.3, 1.0)), Vector((249.0, -2.35, 1.5))]
     for a, b_ in zip(F, F[1:]):
         mid = (a + b_) / 2
-        mid = mid + (W2 - mid) * 0.2
+        mid = mid + (W2 - mid) * 0.34
         g(WING).poly((W2, a, mid)).poly((W2, mid, b_))
-    g(WING).poly((W2, F[3], W1)).poly((W1, F[3], W0))
-    g(limb).chain([W0, W1, W2], [0.2, 0.17, 0.13], seg=10)
+    g(WING).poly((W2, F[-1], W1)).poly((W1, F[-1], W0))
+    g(limb).chain([W0, W1, W2], [0.24, 0.2, 0.15], seg=10)
     for f in F:
-        g(limb).limb(W2, f, 0.11, 0.035, seg=8)
+        g(limb).limb(W2, f, 0.12, 0.03, seg=8)
+        g(BONE).cone(f, f + (f - W2).normalized() * 0.4, 0.05, 0.0, seg=6)
+    g(BONE).chain([W2 + Vector((0, -0.1, 0.1)), W2 + Vector((-0.5, -0.25, 0.75)), W2 + Vector((-0.95, -0.3, 0.6))], [0.13, 0.09, 0.01], seg=7, n=6)
     g.done(parent=R)
 
-    # the head, asleep on the ledge, its closed eye towards the camera
+    # the head, asleep on the ledge, its eye towards the camera
     H = root('Dragon.head', HEAD_AT, 0.0, HEAD_SCALE, parent=R)
     h = G('dragonhead')
     h(BODY).ball((0.1, 0, 0.56), (0.72, 0.6, 0.5)).ball((0.95, 0, 0.42), (0.72, 0.44, 0.33)).ball((1.5, 0, 0.4), (0.3, 0.36, 0.27))
-    h(BELLY).ball((0.75, 0, 0.2), (0.85, 0.42, 0.19))
+    h(DARK).ball((0.9, 0, 0.3), (0.74, 0.47, 0.2))                       # the dark of the upper lip
     for s in (1, -1):
         h(DARK).ball((1.63, s * 0.17, 0.53), (0.1, 0.08, 0.07))
-        h(DARK).ball((0.42, s * 0.42, 0.86), (0.32, 0.16, 0.13), rot=(0, 0.25, s * -0.2))
-        for k in range(17):
-            u = k / 16
-            bow = 1 - (2 * u - 1) ** 2
-            h('#1A1014').ball((0.32 + 0.36 * u, s * (0.5 + 0.02 * bow), 0.69 - 0.07 * bow), 0.036, seg=8, rings=6)
-        h(mix(BODY, '#FFFFFF', 0.12)).ball((0.5, s * 0.45, 0.6), (0.2, 0.1, 0.09))
-        h('#FF8A3C', emit=3.0).ball((1.66, s * 0.17, 0.52), (0.05, 0.045, 0.04))
-        h(BONE).chain([(-0.25, s * 0.5, 0.8), (-0.85, s * 0.72, 1.05), (-1.4, s * 0.8, 1.1)], [0.17, 0.11, 0.02], n=8)
-        h(BONE).cone((-0.3, s * 0.52, 0.45), (-0.82, s * 0.72, 0.5), 0.13, 0.0, seg=8)
-        for x in (0.75, 1.0, 1.25):
-            h(BONE).cone((x, s * 0.36, 0.3), (x + 0.02, s * 0.38, 0.14), 0.045, 0.0, seg=6)
+        h(EMBER, emit=3.0).ball((1.66, s * 0.17, 0.52), (0.05, 0.045, 0.04))
+        # a heavy brow that slopes down towards the snout: he looks angry even asleep
+        h(DARK).ball((0.5, s * 0.45, 0.83), (0.4, 0.17, 0.11), rot=(0, 0.42, s * -0.22))
+        h(DARK).cone((0.2, s * 0.5, 0.9), (-0.1, s * 0.68, 1.12), 0.1, 0.0, seg=7)
+        # the eye that burns under the lid
+        h('#1A0A08').ball((0.52, s * 0.455, 0.63), (0.19, 0.06, 0.12))
+        h('#FFB627', emit=4.0).ball((0.52, s * 0.485, 0.63), (0.15, 0.045, 0.09))
+        h('#120606').ball((0.53, s * 0.522, 0.63), (0.026, 0.014, 0.085), seg=8, rings=6)
+        # horns: a long pair swept back, a shorter pair under them, and spikes along the jaw line
+        h(BONE).chain([(-0.2, s * 0.48, 0.8), (-0.85, s * 0.74, 1.12), (-1.45, s * 0.86, 1.2), (-1.85, s * 0.86, 1.02)], [0.21, 0.15, 0.08, 0.01], n=10)
+        h(DARK).cone((-0.12, s * 0.46, 0.76), (-0.4, s * 0.57, 0.9), 0.25, 0.2, seg=10)
+        h(BONE).chain([(-0.3, s * 0.56, 0.48), (-0.85, s * 0.84, 0.5), (-1.2, s * 0.92, 0.36)], [0.14, 0.09, 0.01], n=8)
+        for x, ln in ((-0.15, 0.36), (0.12, 0.3), (0.38, 0.24)):
+            h(BONE).cone((x, s * 0.55, 0.3), (x - 0.14, s * (0.6 + ln), 0.2), 0.075, 0.0, seg=6)
+        # scars across the snout
+        for x, a in ((0.95, 0.5), (1.12, 0.62)):
+            h(mix(BODY, '#FFFFFF', 0.28)).ball((x, s * 0.4, 0.5), (0.015, 0.02, 0.16), rot=(0, a, 0), seg=8, rings=6)
+        # upper teeth: two long fangs at the front, a row behind them
+        h(BONE).cone((1.5, s * 0.24, 0.3), (1.55, s * 0.25, -0.12), 0.07, 0.0, seg=7)
+        for k, x in enumerate((0.62, 0.78, 0.94, 1.1, 1.26, 1.4)):
+            h(BONE).cone((x, s * 0.39, 0.3), (x + 0.02, s * 0.4, 0.1 if k % 2 else 0.04), 0.05, 0.0, seg=6)
     h.done(parent=H)
+
+    # the eyelids: one node for both, hinged at the top of the eye, so the game can draw them back
+    Lid = root('Dragon.lid', (0.52, 0.0, 0.76), parent=H)
+    lid = G('dragonlid')
+    for s in (1, -1):
+        lid(BODY).ball((0, s * 0.475, -0.13), (0.21, 0.075, 0.135))
+        for k in range(13):
+            u = k / 12
+            bow = 1 - (2 * u - 1) ** 2
+            lid('#1A1014').ball((-0.18 + 0.36 * u, s * (0.535 + 0.012 * bow), -0.245 + 0.045 * bow), 0.03, seg=8, rings=6)
+    lid.done(parent=Lid)
+
+    # the lower jaw: hinged at the back of the mouth, with its own teeth and the fire in the throat
+    Jaw = root('Dragon.jaw', (0.22, 0.0, 0.26), parent=H)
+    jaw = G('dragonjaw')
+    jaw(BELLY).ball((0.53, 0, -0.06), (0.85, 0.42, 0.19))
+    jaw(DARK).ball((0.5, 0, 0.03), (0.78, 0.36, 0.1))
+    jaw(EMBER, emit=3.4).ball((0.35, 0, 0.07), (0.5, 0.26, 0.06))
+    for s in (1, -1):
+        jaw(BONE).cone((1.22, s * 0.2, 0.04), (1.24, s * 0.21, 0.36), 0.06, 0.0, seg=7)
+        for k, x in enumerate((0.5, 0.68, 0.86, 1.04)):
+            jaw(BONE).cone((x, s * 0.34, 0.04), (x, s * 0.35, 0.2 if k % 2 else 0.26), 0.045, 0.0, seg=6)
+    jaw.done(parent=Jaw)
     return R
 
 
@@ -167,6 +224,16 @@ def export(folder):
     for x, y, s, sd in ((205.0, 4.5, 1.5, 11), (217.5, 5.5, 1.3, 12), (228.0, 6.5, 1.6, 13)):
         pm.shards((x, y, 0), 4, s, sd)
     pm.tortoise((219.5, 0.9, 0), rad(-15), 1.25)
+    # the dragon's ground: what it has eaten, pools of lava in the rock, fire crystals, more falls down the ridge
+    pm.ribs((211.0, 5.2, 0), 1.1, rad(20))
+    pm.ribs((236.5, 8.0, 0), 1.7, rad(-25))
+    pm.ribs((224.5, -3.6, 0), 0.7, rad(160))
+    for x, y, r, sd in ((208.5, 7.0, 1.6, 1), (221.5, 9.0, 2.3, 2), (233.0, 10.0, 1.9, 3), (247.5, 9.5, 2.6, 4), (259.0, 10.5, 2.0, 5)):
+        pm.lava_pool((x, y, 0.03), r, sd)
+    for x, y, s_, sd in ((207.5, 2.6, 0.7, 1), (214.5, 3.4, 0.9, 2), (226.5, 4.2, 0.8, 3), (239.0, 5.0, 1.0, 4), (251.5, 5.4, 0.9, 5), (263.5, -3.2, 0.7, 6)):
+        pm.crystals((x, y, 0), 4, s_, sd)
+    for x, y, w, h in ((226.0, 19.6, 0.35, 2.2), (244.5, 19.7, 0.55, 3.0), (262.0, 19.6, 0.4, 2.6)):
+        pm.lavafall((x, y, 0.3), w, h)
     keep.append(_spire())
     pm.nest((268.2, 1.9, LEDGE[2]), 1.1)
     pm.smoke([(264.8, -1.2, 7.5, 0.2), (265.0, -1.3, 8.0, 0.27), (264.8, -1.35, 8.6, 0.36), (265.1, -1.4, 9.3, 0.46)])

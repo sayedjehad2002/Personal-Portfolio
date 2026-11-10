@@ -10,15 +10,23 @@ EYE = '#1E1614'
 
 def school(points, col='#FFD166', s=1.0, name='School'):
     """Many small fish in one mesh. points = [(position, yaw, pitch)]."""
-    body, belly, fins, eyes, rings = B(), B(), B(), B(), B()
+    body, belly, fins, eyes, rings, stripes = B(), B(), B(), B(), B(), B()
     for pos, yaw, pitch in points:
         M = Matrix.Translation(Vector(pos)) @ Euler((0, pitch, yaw)).to_matrix().to_4x4() @ Matrix.Diagonal((s, s, s, 1))
         bmesh.ops.create_uvsphere(body.bm, u_segments=10, v_segments=6, radius=1.0,
                                   matrix=M @ Matrix.Diagonal((0.2, 0.055, 0.1, 1)))
         bmesh.ops.create_uvsphere(belly.bm, u_segments=10, v_segments=6, radius=1.0,
                                   matrix=M @ Matrix.Translation((0.01, 0, -0.03)) @ Matrix.Diagonal((0.17, 0.057, 0.065, 1)))
-        fins.poly([M @ Vector(p) for p in ((-0.16, 0, 0), (-0.34, 0, 0.11), (-0.29, 0, 0), (-0.34, 0, -0.11))])
-        fins.poly([M @ Vector(p) for p in ((0.06, 0, 0.085), (-0.09, 0, 0.17), (-0.1, 0, 0.07))])
+        # a forked tail, a tall dorsal fin, a small one under the belly and a fin on each side
+        fins.poly([M @ Vector(p) for p in ((-0.16, 0, 0), (-0.37, 0, 0.14), (-0.29, 0, 0), (-0.37, 0, -0.14))])
+        fins.poly([M @ Vector(p) for p in ((0.07, 0, 0.085), (-0.03, 0, 0.19), (-0.12, 0, 0.16), (-0.11, 0, 0.07))])
+        fins.poly([M @ Vector(p) for p in ((-0.02, 0, -0.085), (-0.1, 0, -0.15), (-0.11, 0, -0.07))])
+        for y in (-1, 1):
+            fins.poly([M @ Vector(p) for p in ((0.05, y * 0.05, -0.02), (-0.05, y * 0.12, -0.07), (-0.04, y * 0.055, -0.005))])
+        # two darker bands across the back
+        for bx in (0.03, -0.07):
+            bmesh.ops.create_uvsphere(stripes.bm, u_segments=8, v_segments=5, radius=1.0,
+                                      matrix=M @ Matrix.Translation((bx, 0, 0.02)) @ Matrix.Diagonal((0.022, 0.058, 0.088, 1)))
         for y in (-1, 1):
             bmesh.ops.create_uvsphere(rings.bm, u_segments=8, v_segments=5, radius=0.03 * s,
                                       matrix=Matrix.Translation(M @ Vector((0.115, y * 0.04, 0.02))))
@@ -27,6 +35,7 @@ def school(points, col='#FFD166', s=1.0, name='School'):
     return [body.build(name, mat(col, rough=0.5)),
             belly.build(name + '.belly', mat(mix(col, '#FFFFFF', 0.55), rough=0.5)),
             rings.build(name + '.rings', mat('#FFFFFF')),
+            stripes.build(name + '.stripes', mat(mix(col, '#1E2A3A', 0.45), rough=0.5)),
             fins.build(name + '.fins', mat(mix(col, '#FFFFFF', 0.25)), smooth=False),
             eyes.build(name + '.eyes', mat(EYE))]
 

@@ -16,7 +16,7 @@ export type SoundName =
   | "step-sand" | "step-snow" | "step-stone" | "step-scale" | "step-ice"
   | "jump" | "hop" | "land" | "splash-in" | "splash-out" | "kick" | "bubble" | "stroke" | "crack"
   | "cable-on" | "cable-off" | "growl" | "puff" | "nest" | "fanfare" | "firework" | "board" | "realm"
-  | "camel" | "owl" | "seal" | "scurry";
+  | "camel" | "owl" | "seal" | "scurry" | "roar" | "gem";
 
 export type AudioState = {
   /** how much of each realm applies (desert, aqua, snow, magma) */
@@ -284,6 +284,13 @@ const SOUNDS: Record<SoundName, (v: number) => void> = {
     hiss(1.4, "lowpass", 180, 0.16, 0, 90, true);
   },
   puff: () => hiss(0.9, "bandpass", 340, 0.07, 0, 160, true),
+  // the dragon wakes: a long falling growl with breath behind it
+  roar: () => {
+    tone(54, 2.3, "sawtooth", 0.1, 0, 30);
+    tone(108, 1.9, "square", 0.035, 0.05, 56);
+    hiss(2.1, "lowpass", 460, 0.22, 0, 120, true);
+  },
+  gem: () => [988, 1319].forEach((f, i) => tone(f, 0.16, "sine", 0.04, i * 0.06)),
   nest: () => [659, 784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.5, "sine", 0.045, i * 0.09)),
   fanfare: () => {
     [392, 523, 659, 784].forEach((f, i) => tone(f, 0.22, "triangle", 0.08, i * 0.13));

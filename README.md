@@ -7,7 +7,7 @@ A 3D side-scrolling interactive resume. Scroll (or hold ← →) and Sayed's ava
 3. **Snow**, "Discipline Lab" and "AI Lab": out through a hole in the ice, skating, his values and skills, the current role, the live projects and the stack, then a cable car over the gorge.
 4. **Magma**, "Dragon's Mountain": the certificates, then a climb over a sleeping dragon to the egg nest (the contact card) and the top.
 
-After the top, one more stretch of scroll pulls the camera back over the whole walk. Each realm has its own animals that react to him, its own sky, light, outfit, music and sound effects (sound is off until you switch it on). A plain-text "Quick resume" is one click away, "Pause animations" stops the ambient motion, Tab reaches every card, and a browser without WebGL gets the resume as text.
+A short loading screen builds all four realms first and then opens the world on its own. Planting the flag at the top wakes the dragon, which breathes fire into the fireworks. A little more scroll then brings in the contact card, still at the summit. Each realm has its own animals that react to him, its own sky, light, outfit, music and sound effects (sound is off until you switch it on). A plain-text "Quick resume" is one click away, "Pause animations" stops the ambient motion, Tab reaches every card, and a browser without WebGL gets the resume as text.
 
 ## Run it
 

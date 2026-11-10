@@ -18,7 +18,7 @@ page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => m.type() === "error" && !/hmr|WebSocket/i.test(m.text()) && errors.push(m.text().slice(0, 300)));
 
 await page.goto(process.env.QA_URL || "http://localhost:3000/", { waitUntil: "load" });
-await page.waitForFunction(() => window.__world && window.__world.stats().frames > 30 && window.__world.sim.qa.loaded.includes("desert"), null, { timeout: 120000 });
+await page.waitForFunction(() => window.__world && window.__world.stats().frames > 30 && window.__world.sim.qa.revealed, null, { timeout: 120000 });
 const gpu = await page.evaluate(() => {
   const gl = document.createElement("canvas").getContext("webgl2");
   const e = gl && gl.getExtension("WEBGL_debug_renderer_info");
@@ -61,7 +61,10 @@ const frames = async (to) => {
 };
 
 const r = { gpu, viewport: `${width}x${height}`, phone, errors };
-await sleep(800);
+// how long the loading screen was up, then let it fade away
+r.loadMs = Math.round(await page.evaluate(() => performance.now()));
+await sleep(1100);
+r.loaderGone = await page.evaluate(() => !document.querySelector("[data-loader]"));
 // turn the sound on (off by default) so the audio graph runs during the walk
 await page.getByRole("button", { name: "Sound" }).click();
 await sleep(400);

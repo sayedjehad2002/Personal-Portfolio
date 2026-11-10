@@ -24,22 +24,36 @@ def _frond(b, top, az, length, width, droop, n=7):
 
 
 def palm(loc, h=4.2, lean=0.5, seed=0, trunk='#A2835B', leaf='#5F9160', leaf2='#7BAE6C', snow=None):
+    """Date palm: a ringed trunk that flares at the foot, a full crown of long and short fronds, hanging dates."""
     rnd = random.Random(seed)
     R = root('Palm', loc)
     g = G('palm')
     top = (lean, 0, h)
-    g(trunk).chain([(0, 0, 0), (lean * 0.15, 0, h * 0.35), (lean * 0.55, 0, h * 0.7), top],
-                   [0.19, 0.16, 0.13, 0.12], n=10, seg=10)
-    g(trunk).ball((lean, 0, h + 0.02), 0.2)
-    n = 9
+    path = [(0, 0, 0), (lean * 0.15, 0, h * 0.35), (lean * 0.55, 0, h * 0.7), top]
+    g(trunk).chain(path, [0.23, 0.17, 0.14, 0.13], n=12, seg=10)
+    g(trunk).cone((0, 0, -0.05), (0.02, 0, 0.5), 0.34, 0.2, seg=10)
+    # the rings old fronds leave on the trunk
+    dark = mix(trunk, '#3A2A1C', 0.4)
+    for i in range(1, 12):
+        t = i / 12
+        x = lean * (0.15 * min(t / 0.35, 1) + (0.4 * max(0.0, min((t - 0.35) / 0.35, 1))) + (0.45 * max(0.0, (t - 0.7) / 0.3)))
+        r = 0.21 - 0.08 * t
+        g(dark).cone((x, 0, h * t), (x, 0, h * t + 0.07), r * 1.07, r * 1.14, seg=10)
+    g(dark).ball((lean, 0, h + 0.02), 0.24)
+    n = 12
     for i in range(n):
         az = 2 * pi * i / n + rnd.uniform(-0.2, 0.2)
-        _frond(g(leaf if i % 2 else leaf2), top, az, h * rnd.uniform(0.42, 0.52), 0.26, rnd.uniform(0.75, 1.05))
-    for i in range(5):
-        az = 2 * pi * i / 5 + 0.3
-        _frond(g(leaf2), (lean, 0, h + 0.05), az, h * 0.3, 0.2, 0.25)
-    for i in range(5):
-        g('#B9772F').ball((lean + 0.16 * cos(i * 1.3), 0.16 * sin(i * 1.3), h - 0.16), 0.07, seg=10, rings=6)
+        _frond(g(leaf if i % 2 else leaf2), top, az, h * rnd.uniform(0.44, 0.56), 0.27, rnd.uniform(0.7, 1.1))
+    for i in range(7):
+        az = 2 * pi * i / 7 + 0.3
+        _frond(g(mix(leaf2, '#FFFFFF', 0.12)), (lean, 0, h + 0.05), az, h * rnd.uniform(0.28, 0.36), 0.2, rnd.uniform(0.15, 0.4))
+    # dates hanging in bunches under the crown
+    for i in range(3):
+        a = 2.1 * i + rnd.uniform(0, 0.6)
+        bx, by = lean + 0.2 * cos(a), 0.2 * sin(a)
+        g('#8A5A2A').limb((lean, 0, h - 0.05), (bx, by, h - 0.42), 0.02, seg=5)
+        for k in range(6):
+            g('#B9772F' if k % 2 else '#D08A35').ball((bx + rnd.uniform(-0.07, 0.07), by + rnd.uniform(-0.07, 0.07), h - 0.42 - 0.06 * k), 0.06, seg=8, rings=5)
     if snow:
         g(snow).ball((lean, 0, h + 0.22), (0.5, 0.5, 0.14))
     for o in g.done(parent=R):
@@ -153,17 +167,21 @@ def pool(loc, rx=2.2, ry=0.9, col='#8FD0D6'):
 # ------------------------------------------------------------------ sky
 
 def cloud(center, s=1.0, col='#FFFFFF', seed=0, emit=0.35):
-    """Soft cloud with a flat base."""
+    """A heaped cloud with a flat base: a long low row of puffs and a taller row on top of it."""
     rnd = random.Random(seed)
     b = B()
     x, y, z = center
-    n = 6
+    keep = lambda v, z=z: v.z > z - 0.05 * s
+    n = 7
     for i in range(n):
         t = i / (n - 1) - 0.5
-        r = s * (1.0 - 1.6 * t * t) * rnd.uniform(0.75, 1.1)
-        b.ball((x + t * s * 4.2, y + rnd.uniform(-0.3, 0.3) * s, z + r * 0.35), (r * 1.25, r, r * 0.8), seg=18, rings=12,
-               keep=lambda v, z=z: v.z > z - 0.05 * s)
-    b.ball((x, y, z - 0.05 * s), (s * 2.5, s * 0.9, s * 0.07))
+        r = s * (0.95 - 1.5 * t * t) * rnd.uniform(0.8, 1.1)
+        b.ball((x + t * s * 4.6, y + rnd.uniform(-0.3, 0.3) * s, z + r * 0.3), (r * 1.25, r, r * 0.75), seg=18, rings=12, keep=keep)
+    for i in range(4):
+        t = i / 3 - 0.5
+        r = s * (0.8 - 0.9 * t * t) * rnd.uniform(0.8, 1.05)
+        b.ball((x + t * s * 2.3 + rnd.uniform(-0.2, 0.2) * s, y + 0.2 * s, z + s * 0.62 + r * 0.25), (r * 1.1, r * 0.9, r * 0.8), seg=16, rings=10)
+    b.ball((x, y, z - 0.05 * s), (s * 2.8, s * 0.95, s * 0.07))
     return b.build('Cloud', mat(col, emit=emit), shadow=False)
 
 

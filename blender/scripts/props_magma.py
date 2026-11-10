@@ -173,3 +173,46 @@ def plume(base, s=1.0, n=9, drift=0.55):
         g(mix('#8A3A2C', '#241826', min(1.0, t * 1.4)), alpha=0.85 - 0.45 * t).ball(
             (x + drift * s * 6 * t * t + 0.4 * s * sin(i * 1.9), y, z + s * 5.2 * t), (r * 1.15, r, r * 0.85))
     return g.done(shadow=False)
+
+
+def ribs(loc, s=1.0, rz=0.0, n=6, col='#E6D6B4'):
+    """The rib cage of something the dragon ate: a spine on the ground and arched ribs, half sunk in the rock."""
+    R = root('Ribs', loc, rz, s)
+    b = B()
+    b.chain([(-1.6, 0, 0.12), (0, 0, 0.2), (1.7, 0, 0.1)], [0.1, 0.13, 0.07], seg=8)
+    for i in range(n):
+        x = -1.3 + 2.6 * i / (n - 1)
+        h = 1.25 - 0.35 * abs(x) / 1.3
+        for sd in (1, -1):
+            b.chain([(x, 0, 0.15), (x - 0.12, sd * 0.55, h * 0.75), (x - 0.2, sd * 0.38, h), (x - 0.22, sd * 0.12, h * 1.02)], [0.07, 0.06, 0.045, 0.02], seg=6, n=7)
+    o = b.build('RibsMesh', mat(col, rough=0.7))
+    o.parent = R
+    return R
+
+
+def lava_pool(loc, r=1.5, seed=0, emit=3.0):
+    """A pool of lava in the rock, with a rim of broken stone."""
+    rnd = random.Random(seed)
+    x, y, z = loc
+    pts = []
+    n = 11
+    for i in range(n):
+        a = 2 * pi * i / n
+        k = r * rnd.uniform(0.75, 1.1)
+        pts.append((x + cos(a) * k, y + sin(a) * k * 0.62, z))
+    B().poly(pts).build('LavaPool', mat(LAVA, emit=emit), smooth=False, shadow=False)
+    rim = B()
+    for (px, py, _) in pts:
+        rim.ico((x + (px - x) * 1.08, y + (py - y) * 1.08, z), r * rnd.uniform(0.1, 0.2), sub=1, seed=rnd.randint(0, 99))
+    return rim.build('LavaRim', mat(ROCK, rough=0.55), smooth=False)
+
+
+def crystals(loc, n=4, s=1.0, seed=0, col='#FF9A3C', emit=1.7):
+    """Fire crystals: shards that glow from inside."""
+    rnd = random.Random(seed)
+    b = B()
+    for _ in range(n):
+        x, y = loc[0] + rnd.uniform(-0.6, 0.6) * s, loc[1] + rnd.uniform(-0.3, 0.3) * s
+        hh = s * rnd.uniform(0.4, 1.1)
+        b.cone((x, y, loc[2]), (x + rnd.uniform(-0.25, 0.25) * hh, y, loc[2] + hh), 0.16 * s * rnd.uniform(0.7, 1.2), 0.0, seg=5)
+    return b.build('Crystals', mat(col, emit=emit, rough=0.3), smooth=False, shadow=False)

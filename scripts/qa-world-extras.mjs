@@ -11,6 +11,7 @@ const r = {};
 const html = await (await fetch(url)).text();
 r.html = {
   firstFrameImg: html.includes('src="/world/first-frame.jpg"'),
+  loadingScreen: html.includes("data-loader") && html.includes("Raising the dunes"),
   phoneSource: html.includes("/world/first-frame-phone.jpg"),
   preload: /rel="preload"[^>]*first-frame\.jpg/.test(html),
   title: (html.match(/<title>([^<]*)<\/title>/) || [])[1],
@@ -32,13 +33,38 @@ r["GET /nowhere"] = { status: nf.status, themed: (await nf.text()).includes("Off
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text().slice(0, 200)));
   await page.goto(url, { waitUntil: "load" });
-  await page.waitForFunction(() => window.__world && window.__world.stats().frames > 30 && window.__world.sim.qa.loaded.includes("desert"), null, { timeout: 120000 });
+  await page.waitForFunction(() => window.__world && window.__world.stats().frames > 30 && window.__world.sim.qa.revealed, null, { timeout: 120000 });
   await page.keyboard.down("ArrowRight");
   await page.waitForTimeout(2500);
   await page.keyboard.up("ArrowRight");
   await page.waitForTimeout(600);
-  r.reducedMotion = await page.evaluate(() => ({ calm: window.__world.sim.calm, x: +window.__world.sim.x.toFixed(1), firstFrameGone: getComputedStyle(document.querySelector("picture img")).opacity }));
+  r.reducedMotion = await page.evaluate(() => ({ calm: window.__world.sim.calm, x: +window.__world.sim.x.toFixed(1), loaderGone: !document.querySelector("[data-loader]") }));
   r.reducedMotion.errors = errors;
+  await browser.close();
+}
+
+// the loading screen: hold the realm models back so it can be seen part-way, then check it goes when they land
+for (const [name, w, h, phone] of [["loader", 1366, 657, false], ["loader-phone", 390, 844, true]]) {
+  const browser = await chromium.launch({ channel, headless: true, args: gpu });
+  const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
+  const wait = { desert: 300, aqua: 900, snow: 4200, magma: 4800 };
+  await page.route("**/world/*.glb", async (route) => {
+    const id = route.request().url().match(/world\/(\w+)\.glb/)[1];
+    await new Promise((res) => setTimeout(res, wait[id] ?? 0));
+    route.continue();
+  });
+  await page.goto(url, { waitUntil: "load" });
+  await page.waitForTimeout(2600);
+  const mid = await page.evaluate(() => ({
+    shown: !!document.querySelector("[data-loader]"),
+    text: document.querySelector("[data-loader] [role=status]")?.textContent,
+    progress: window.__world ? +window.__world.sim.qa.progress.toFixed(2) : null,
+    scrollLocked: getComputedStyle(document.documentElement).overflow,
+  }));
+  await page.screenshot({ path: `test-results/world/${name}.png` });
+  await page.waitForFunction(() => window.__world && window.__world.sim.qa.revealed, null, { timeout: 120000 });
+  await page.waitForTimeout(1200);
+  r[name] = { mid, after: await page.evaluate(() => ({ gone: !document.querySelector("[data-loader]"), scrollLocked: getComputedStyle(document.documentElement).overflow, loaded: window.__world.sim.qa.loaded.length })) };
   await browser.close();
 }
 

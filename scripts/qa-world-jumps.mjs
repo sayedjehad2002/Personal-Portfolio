@@ -11,7 +11,7 @@ const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => m.type() === "error" && errors.push(m.text().slice(0, 200)));
 await page.goto(process.env.QA_URL || "http://localhost:3000/", { waitUntil: "load" });
-await page.waitForFunction(() => window.__world && window.__world.stats().frames > 30 && window.__world.sim.qa.loaded.includes("desert"), null, { timeout: 120000 });
+await page.waitForFunction(() => window.__world && window.__world.stats().frames > 30 && window.__world.sim.qa.revealed, null, { timeout: 120000 });
 
 const r = { errors };
 // walk a little into the Aqua realm first, so its title is on screen when the jump happens
@@ -29,7 +29,7 @@ for (const realm of ["Magma", "Desert", "Snow", "Aqua"]) {
       y: +window.__world.sim.y.toFixed(2),
       onGround: q.onGround,
       chip: document.querySelector('nav[aria-label="Realms"] [aria-current]')?.textContent,
-      titlesOnScreen: [...document.querySelectorAll("h2")].filter((h) => { const b = h.getBoundingClientRect(); return b.right > 0 && b.left < vw; }).map((h) => h.textContent),
+      titlesOnScreen: [...document.querySelectorAll("h2.world-title")].filter((h) => { const b = h.getBoundingClientRect(); return b.right > 0 && b.left < vw; }).map((h) => h.textContent),
     };
   });
   await page.screenshot({ path: `${out}/jump-${realm.toLowerCase()}.png` });

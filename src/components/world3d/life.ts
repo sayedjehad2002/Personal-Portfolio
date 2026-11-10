@@ -19,6 +19,8 @@ export type Ctx = {
   running: boolean;
   /** the dragon's breath, -1..1 */
   breath: number;
+  /** seconds since the dragon woke (he reached the top), or -1 while it sleeps */
+  wake: number;
   /** ask for a sound (the camel's grunt, the owl's hoot ...) */
   emit: (name: SoundName) => void;
 };
@@ -105,8 +107,22 @@ function school(scene: THREE.Object3D, template: string, count: number) {
   return mesh;
 }
 
+/** A few far-off birds crossing the sky: each is two flat wings seen from the front, beaten by flipping their height. */
+function flock(scene: THREE.Object3D, name: string, count: number, color: string) {
+  const old = scene.getObjectByName(name) as THREE.InstancedMesh | undefined;
+  if (old) return old;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array([0, 0, 0, -0.42, 0.2, 0, -0.2, 0.0, 0, 0, 0, 0, 0.2, 0.0, 0, 0.42, 0.2, 0]), 3));
+  const mesh = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.75 }), count);
+  mesh.name = name;
+  mesh.frustumCulled = false;
+  scene.add(mesh);
+  return mesh;
+}
+
 function desert(scene: THREE.Object3D): Life {
   const L = LEVELS.desert.life;
+  const birds = flock(scene, "SkyBirds", 7, "#6B5648");
   const palms = findAll(scene, /^Palm\d*$/);
   const flamingos = findAll(scene, /^Flamingo\d*$/);
   const camel = find(scene, "Camel");
@@ -127,6 +143,19 @@ function desert(scene: THREE.Object3D): Life {
         b.position.y += lift;
         b.userData.lift = (b.userData.lift ?? 0) + lift;
       });
+      // a loose line of birds drifts across the far sky, and comes round again
+      for (let i = 0; i < birds.count; i++) {
+        const span = 90;
+        const bx = c.camX * 0.8 - span / 2 + ((((i * 2.3 + c.time * 1.1) % span) + span) % span);
+        const k = bx < 70 ? 1 : 0; // never out over the Gulf
+        tmp.m.compose(
+          tmp.v.set(bx, 10.5 + Math.sin(i * 1.7) * 1.4 + Math.sin(c.time * 0.6 + i) * 0.3, -46 - (i % 3) * 4),
+          tmp.q.identity(),
+          tmp.s.set(1.5 * k, 1.5 * k * Math.sin(c.time * 5.5 + i * 1.3), 1.5 * k),
+        );
+        birds.setMatrixAt(i, tmp.m);
+      }
+      birds.instanceMatrix.needsUpdate = true;
       if (camel) camel.scale.y = 1 + Math.sin(c.time * 1.6) * 0.006;
       if (tail) tail.rotation.x = Math.sin(c.time * 2.1) * 0.22 + Math.sin(c.time * 5.3) * 0.05;
       look(c);
@@ -149,6 +178,17 @@ function aqua(scene: THREE.Object3D): Life {
   const L = LEVELS.aqua.life;
   const gold = school(scene, "FishGold", 46);
   const blue = school(scene, "FishBlue", 22);
+  const reef = school(scene, "FishCoral", 18);
+  // no two fish the same size or quite the same colour
+  for (const [m, tint] of [[gold, 0.16], [blue, 0.14], [reef, 0.2]] as const) {
+    if (!m) continue;
+    for (let i = 0; i < m.count; i++) {
+      const v = Math.abs(Math.sin(i * 91.7) * 43758.5453) % 1;
+      m.setColorAt(i, new THREE.Color().setRGB(1 - tint * v, 1 - tint * 0.5 * (1 - v), 1 - tint * (1 - v)));
+    }
+    if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  }
+  const size = (i: number) => 0.75 + (Math.abs(Math.sin(i * 37.3) * 1375.3) % 1) * 0.65;
   const seeds = Array.from({ length: 46 }, (_, i) => ({ r: Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1, r2: Math.abs(Math.sin(i * 78.233) * 12345.678) % 1 }));
   const turtle = find(scene, "Turtle");
   const flips = [find(scene, "TurtleflipL"), find(scene, "TurtleflipR")];
@@ -177,7 +217,7 @@ function aqua(scene: THREE.Object3D): Life {
           const cy = under ? c.y + 0.9 : L.school.height;
           const fy = cy + part(fx) + (s.r - 0.5) * 0.56 + Math.sin(c.time * 1.3 + i) * 0.05;
           const inSea = fx > L.school.x0 && fx < L.school.x1 && fy < L.sea_level - 0.3;
-          const k = inSea ? 1 : 0;
+          const k = inSea ? size(i) : 0;
           tmp.q.setFromEuler(tmp.e.set(0, (s.r2 - 0.5) * 0.24, (part(fx + 0.3) - part(fx - 0.3)) * 1.3 + Math.sin(c.time * 6 + i) * 0.04));
           tmp.m.compose(tmp.v.set(fx, fy, -(L.school.depth + s.r2 * 2.2)), tmp.q, tmp.s.set(k, k, k));
           gold.setMatrixAt(i, tmp.m);
@@ -189,12 +229,28 @@ function aqua(scene: THREE.Object3D): Life {
         for (let i = 0; i < blue.count; i++) {
           const s = seeds[i];
           const fx = c.camX * 0.6 + 36 - span / 2 + ((((i / blue.count) * span + c.time * 0.45) % span) + span) % span;
-          const k = fx > L.school.x0 + 2 && fx < L.school.x1 ? 1 : 0;
+          const k = fx > L.school.x0 + 2 && fx < L.school.x1 ? size(i + 50) : 0;
           tmp.q.setFromEuler(tmp.e.set(0, 0, Math.sin(c.time * 0.8 + i) * 0.08));
           tmp.m.compose(tmp.v.set(fx, L.bed + 3.2 + (s.r - 0.5) * 0.7 + Math.sin(c.time + i) * 0.08, -(9 + s.r2 * 2)), tmp.q, tmp.s.set(k, k, k));
           blue.setMatrixAt(i, tmp.m);
         }
         blue.instanceMatrix.needsUpdate = true;
+      }
+      // the coral fish keep to the reef: small groups that circle their own patch and dart when he comes close
+      if (reef) {
+        for (let i = 0; i < reef.count; i++) {
+          const s = seeds[i];
+          const home = L.school.x0 + 6 + (Math.floor(i / 3) / 6) * (L.school.x1 - L.school.x0 - 12);
+          const a = c.time * (0.5 + s.r * 0.5) + i * 2.1;
+          const scare = Math.exp(-(((home - c.x) / 2.5) ** 2));
+          const fx = home + Math.cos(a) * (1.1 + s.r2 + scare * 1.6);
+          const fy = L.bed + 1.1 + s.r * 0.9 + Math.sin(a * 1.3) * 0.25 + scare * 0.5;
+          tmp.q.setFromEuler(tmp.e.set(0, Math.sin(a) > 0 ? Math.PI : 0, Math.sin(a * 1.3) * 0.15));
+          const k = size(i + 90) * 0.9;
+          tmp.m.compose(tmp.v.set(fx, Math.min(fy, L.sea_level - 0.5), -(2.2 + s.r2 * 3.5)), tmp.q, tmp.s.set(k, k, k));
+          reef.setMatrixAt(i, tmp.m);
+        }
+        reef.instanceMatrix.needsUpdate = true;
       }
       if (turtle) {
         // the turtle swims beside him for as long as he is in the deep water
@@ -276,6 +332,18 @@ function snow(scene: THREE.Object3D): Life {
   };
 }
 
+/** how far the dragon's head lifts off the ledge when it wakes (radians, about the base of its skull) */
+export const DRAGON_LIFT = 0.44;
+/** The waking, by seconds: the eye opens, the head rises to look at him, the jaws open for the fire and half close. */
+export function dragonWake(t: number) {
+  if (t < 0) return { eye: 0, lift: 0, jaw: 0 };
+  const ease = (v: number) => {
+    const k = Math.max(0, Math.min(1, v));
+    return k * k * (3 - 2 * k);
+  };
+  return { eye: ease(t / 0.45), lift: ease((t - 0.5) / 1.3), jaw: ease((t - 1.75) / 0.3) * (1 - 0.7 * ease((t - 3.6) / 0.7)) };
+}
+
 function magma(scene: THREE.Object3D): Life {
   const L = LEVELS.magma.life;
   const lizards = findAll(scene, /^Lizard\d*$/).map((n, i) =>
@@ -283,12 +351,29 @@ function magma(scene: THREE.Object3D): Life {
   );
   const dragon = find(scene, "Dragon");
   const flag = find(scene, "SummitFlag");
+  const head = find(scene, "Dragonhead");
+  const jaw = find(scene, "Dragonjaw");
+  const lid = find(scene, "Dragonlid");
   const f = { k: 0 };
+  const k = { eye: 0, lift: 0, jaw: 0 };
   return {
     update(c) {
       lizards.forEach((l) => l(c));
       // the dragon sleeps: its whole body rises and falls with each breath
       if (dragon) dragon.scale.y = 1 + c.breath * 0.018;
+      // asleep its eye stays shut (it twitches now and then); when he plants the flag the eye opens, the head
+      // comes up off the ledge to look at him, and the jaws open
+      const w = dragonWake(c.wake);
+      k.eye += (w.eye - k.eye) * Math.min(1, c.dt * 9);
+      k.lift += (w.lift - k.lift) * Math.min(1, c.dt * (w.lift > k.lift ? 9 : 3.5));
+      k.jaw += (w.jaw - k.jaw) * Math.min(1, c.dt * 10);
+      const twitch = Math.max(0, Math.sin(c.time * 0.7) - 0.985) * 12;
+      if (lid) lid.scale.y = 1 - 0.9 * Math.max(k.eye, twitch);
+      if (head) {
+        head.rotation.z = k.lift * DRAGON_LIFT + Math.sin(c.time * 1.4) * 0.03 * k.lift;
+        head.rotation.y = -0.3 * k.lift + Math.sin(c.time * 0.9) * 0.05 * k.lift;
+      }
+      if (jaw) jaw.rotation.z = -0.62 * k.jaw - 0.04 * k.lift;
       if (flag) {
         // he plants the flag when he reaches the very top
         f.k += ((c.x > L.flag.x - 1.4 && c.y > L.top - 0.4 ? 1 : 0) - f.k) * Math.min(1, c.dt * 4);

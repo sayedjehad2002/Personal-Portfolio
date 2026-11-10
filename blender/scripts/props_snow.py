@@ -7,17 +7,26 @@ import surfaces as S
 
 
 def pine(loc, h=3.0, seed=0, green='#2F6657', snow='#F2F7FD'):
+    """Snow pine: five tiers of boughs that droop a little, each carrying snow, on a trunk with a root flare."""
     rnd = random.Random(seed)
     R = root('Pine', loc)
     g = G('pine')
-    g('#6B5240').cone((0, 0, 0), (0, 0, h * 0.3), 0.07 * h, 0.05 * h, seg=8)
-    for i in range(3):
-        z0 = h * (0.18 + 0.25 * i)
-        hh = h * (0.46 - 0.04 * i)
-        r = h * (0.27 - 0.06 * i)
-        g(green).cone((0, 0, z0), (0, 0, z0 + hh), r, 0.0, seg=12, caps=True)
-        k = rnd.uniform(0.42, 0.55)
-        g(snow).cone((0, 0, z0 + hh * k), (0, 0, z0 + hh * 1.02), r * (1 - k) * 1.12, 0.0, seg=12, caps=True)
+    g('#6B5240').cone((0, 0, 0), (0, 0, h * 0.3), 0.075 * h, 0.05 * h, seg=8)
+    g('#6B5240').cone((0, 0, -0.03), (0, 0, h * 0.07), 0.11 * h, 0.07 * h, seg=8)
+    tiers = 5
+    dark = mix(green, '#0E2A24', 0.35)
+    for i in range(tiers):
+        t = i / (tiers - 1)
+        z0 = h * (0.16 + 0.16 * i)
+        hh = h * (0.34 - 0.03 * i)
+        r = h * (0.3 - 0.21 * t) * rnd.uniform(0.94, 1.06)
+        g(dark if i % 2 else green).cone((0, 0, z0 - hh * 0.06), (0, 0, z0 + hh), r, 0.0, seg=11, caps=True)
+        k = rnd.uniform(0.4, 0.52)
+        g(snow).cone((0, 0, z0 + hh * k), (0, 0, z0 + hh * 1.02), r * (1 - k) * 1.14, 0.0, seg=11, caps=True)
+        # lumps of snow sitting out on the boughs
+        for a in range(3):
+            az = rnd.uniform(0, 6.28)
+            g(snow).ball((cos(az) * r * 0.72, sin(az) * r * 0.72, z0 + hh * 0.13), (r * 0.2, r * 0.2, r * 0.09), seg=8, rings=5)
     g.done(parent=R)
     return R
 

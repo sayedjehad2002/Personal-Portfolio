@@ -67,7 +67,7 @@ export const REALMS = [
     label: "Aqua",
     x0: aqua.x0,
     x1: aqua.x1,
-    sky: "linear-gradient(to top, #0C4660 0%, #147590 31%, #1F9FB2 58%, #62D2D2 83%, #C4F5EC 100%)",
+    sky: "linear-gradient(to top, #2FA3B6 0%, #38AEC0 50%, #48BAC8 100%)",
     accent: "#0F7F8C",
     sun: { color: "#F2FFFA", power: 2.1, at: [-3, 40, 10] },
     hemi: { sky: "#BFEFF0", ground: "#6FC3C0", power: 2.3 },
