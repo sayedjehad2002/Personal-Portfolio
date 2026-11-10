@@ -1,0 +1,192 @@
+"""Realm 4, Magma (x 204 to 272): certificates on the obsidian path, then the climb over the sleeping dragon to the
+egg nest and the top.
+
+The dragon lies along the walk with its spine on the walk plane (y = 0), so he climbs its back in plain view: tail,
+hips, back, neck, head. Its head rests on a ledge of the spire; the nest is on the next ledge up, the top above that.
+"""
+import random
+import bpy
+from math import sin, radians as rad
+from mathutils import Vector
+from kit import B, G, mat, mix, root, spline
+import props
+import props_magma as pm
+import gamekit as gk
+import levelkit as lk
+
+GROUND, HAZE = '#2E2632', '#6E2A22'
+BODY, BELLY, DARK, BONE, WING = '#A2322D', '#E4A86C', '#5E1D22', '#EFDDBA', '#6E2129'
+X0, X1 = lk.MAGMA
+
+# the dragon's spine on the walk plane: x, height of its centre, radius
+SPINE = [(226, 0.08, 0.05), (230, 0.22, 0.2), (234, 0.5, 0.45), (238, 1.0, 0.9), (242, 1.7, 1.5), (246, 2.3, 2.0), (250, 2.6, 2.2),
+         (254, 2.9, 2.0), (257, 3.9, 1.5), (259.5, 5.3, 1.15), (261, 6.5, 1.0)]
+HEAD_AT, HEAD_SCALE = (261.0, 0.0, 5.8), 2.2
+LEDGE, PEAK = (265.2, 271.2, 8.3), (271.2, 274.8, 9.4)   # x0, x1, top: the nest ledge and the very top
+
+
+def _dragon():
+    R = root('Dragon')
+    pts, rr = spline([(x, 0.0, z) for x, z, _ in SPINE], [r for _, _, r in SPINE], 96)
+    g = G('dragon')
+    g(BODY).chain(pts, rr, seg=20)
+    n = len(pts)
+    for i in range(n):
+        p, r = pts[i], rr[i]
+        if r > 0.3:
+            g(BELLY).ball(p + Vector((0, -0.22 * r, -0.5 * r)), 0.6 * r, seg=16, rings=9)
+        # one row of spines just behind the line he walks, so they never hide him
+        if r > 0.12 and i % 3 == 1 and i < n - 4:
+            tan = (pts[min(i + 1, n - 1)] - pts[max(i - 1, 0)]).normalized()
+            base = p + Vector((0, 0.6 * r, 0.76 * r))
+            h = 0.5 * r + 0.14
+            g(BONE).cone(base, base + Vector((0, 0.1 * r, h)) - tan * (h * 0.4), 0.22 * r + 0.035, 0.0, seg=8)
+    limb = mix(BODY, '#000000', 0.12)
+    for (tx, tz, ts), (px, pz) in (((243.5, 1.35, 1.0), (247.0, 0.3)), ((254.2, 1.9, 0.75), (257.0, 0.3))):
+        g(limb).ball((tx, -1.55, tz), (1.8 * ts, 0.95 * ts, 1.45 * ts))
+        g(limb).chain([(tx + 0.9, -2.0, tz * 0.6), (px - 0.6, -2.35, 0.5)], [0.62 * ts, 0.44 * ts], seg=14)
+        g(limb).ball((px, -2.4, pz), (0.62 * ts, 0.46 * ts, 0.3 * ts))
+        for k in (-1, 0, 1):
+            g(BONE).cone((px + 0.4, -2.4 + 0.24 * k, 0.2), (px + 0.95, -2.4 + 0.3 * k, 0.07), 0.14 * ts, 0.0, seg=8)
+    # folded wing along the flank that faces the camera, kept below his path
+    W0, W1, W2 = Vector((253.0, -2.0, 3.9)), Vector((249.0, -2.3, 3.6)), Vector((246.0, -2.25, 3.0))
+    F = [Vector((241.5, -1.75, 2.2)), Vector((242.5, -1.95, 1.5)), Vector((245.0, -2.25, 1.2)), Vector((249.0, -2.35, 1.6))]
+    for a, b_ in zip(F, F[1:]):
+        mid = (a + b_) / 2
+        mid = mid + (W2 - mid) * 0.2
+        g(WING).poly((W2, a, mid)).poly((W2, mid, b_))
+    g(WING).poly((W2, F[3], W1)).poly((W1, F[3], W0))
+    g(limb).chain([W0, W1, W2], [0.2, 0.17, 0.13], seg=10)
+    for f in F:
+        g(limb).limb(W2, f, 0.11, 0.035, seg=8)
+    g.done(parent=R)
+
+    # the head, asleep on the ledge, its closed eye towards the camera
+    H = root('Dragon.head', HEAD_AT, 0.0, HEAD_SCALE, parent=R)
+    h = G('dragonhead')
+    h(BODY).ball((0.1, 0, 0.56), (0.72, 0.6, 0.5)).ball((0.95, 0, 0.42), (0.72, 0.44, 0.33)).ball((1.5, 0, 0.4), (0.3, 0.36, 0.27))
+    h(BELLY).ball((0.75, 0, 0.2), (0.85, 0.42, 0.19))
+    for s in (1, -1):
+        h(DARK).ball((1.63, s * 0.17, 0.53), (0.1, 0.08, 0.07))
+        h(DARK).ball((0.42, s * 0.42, 0.86), (0.32, 0.16, 0.13), rot=(0, 0.25, s * -0.2))
+        for k in range(17):
+            u = k / 16
+            bow = 1 - (2 * u - 1) ** 2
+            h('#1A1014').ball((0.32 + 0.36 * u, s * (0.5 + 0.02 * bow), 0.69 - 0.07 * bow), 0.036, seg=8, rings=6)
+        h(mix(BODY, '#FFFFFF', 0.12)).ball((0.5, s * 0.45, 0.6), (0.2, 0.1, 0.09))
+        h('#FF8A3C', emit=3.0).ball((1.66, s * 0.17, 0.52), (0.05, 0.045, 0.04))
+        h(BONE).chain([(-0.25, s * 0.5, 0.8), (-0.85, s * 0.72, 1.05), (-1.4, s * 0.8, 1.1)], [0.17, 0.11, 0.02], n=8)
+        h(BONE).cone((-0.3, s * 0.52, 0.45), (-0.82, s * 0.72, 0.5), 0.13, 0.0, seg=8)
+        for x in (0.75, 1.0, 1.25):
+            h(BONE).cone((x, s * 0.36, 0.3), (x + 0.02, s * 0.38, 0.14), 0.045, 0.0, seg=6)
+    h.done(parent=H)
+    return R
+
+
+def _top_profile():
+    """The line he walks: the top of the dragon's back, then its skull and snout."""
+    pts, rr = spline([(x, 0.0, z) for x, z, _ in SPINE], [r for _, _, r in SPINE], 36)
+    # the tail tip meets the ground, so he steps onto it without a hop
+    line = [(SPINE[0][0] - 0.7, 0.0)] + [(p.x, p.z + r) for p, r in zip(pts, rr)]
+    hx, _, hz = HEAD_AT
+    S = HEAD_SCALE  # the skull, the snout, the tip of the nose (measured on the head model)
+    line += [(hx + 1.0, hz + 1.06 * S), (hx + 0.95 * S + 0.2, hz + 0.75 * S), (hx + 1.75 * S, hz + 0.67 * S), (LEDGE[0], hz + 0.64 * S)]
+    return line
+
+
+def _into(dst, src):
+    me = bpy.data.meshes.new('_t')
+    src.bm.to_mesh(me)
+    src.bm.free()
+    dst.bm.from_mesh(me)
+    bpy.data.meshes.remove(me)
+
+
+def _spire():
+    """The rock the dragon sleeps against: three tiers built from rough layers, with a lighter ledge on each tier
+    and spikes at its foot. The game gives it the same glowing lava veins as the ground (material ObsSpire)."""
+    rnd = random.Random(6)
+    body, ledges = B(), B()
+    for (cx, cy, z0, z1, r0, r1) in ((268.5, 2.8, -0.5, 6.0, 8.0, 6.6), (269.7, 1.0, 6.0, 8.3, 4.9, 4.6), (273.0, 0.6, 8.3, 9.4, 2.2, 1.9)):
+        n = max(2, round((z1 - z0) / 1.3))
+        for k in range(n):
+            a0, a1 = z0 + (z1 - z0) * k / n, z0 + (z1 - z0) * (k + 1) / n
+            ra, rb = r0 + (r1 - r0) * k / n, r0 + (r1 - r0) * (k + 1) / n
+            t = B()
+            t.cone((cx, cy, a0), (cx, cy, a1), ra * rnd.uniform(1.0, 1.07), rb * rnd.uniform(1.0, 1.04), seg=9)
+            for v in t.bm.verts:
+                v.co.x += rnd.uniform(-0.05, 0.05) * ra
+                v.co.y += rnd.uniform(-0.05, 0.05) * ra
+            _into(body, t)
+        t = B()
+        t.cone((cx, cy, z1 - 0.16), (cx, cy, z1), r1 * 1.07, r1 * 1.03, seg=9)
+        _into(ledges, t)
+    spire = body.build('Spire', mat('#3A2F3E', rough=0.55), smooth=False)
+    gk.named_material(spire, 'ObsSpire', '#3A2F3E', 0.55)
+    ledges.build('SpireLedges', mat('#5A4B5E', rough=0.6), smooth=False)
+    for x, y, n, s_, sd in ((262.2, -3.0, 4, 1.4, 21), (269.5, -4.4, 5, 1.6, 22), (276.6, -2.0, 4, 1.5, 23), (277.5, 4.0, 4, 1.8, 24)):
+        pm.shards((x, y, 0), n, s_, sd)
+    return spire
+
+
+def export(folder):
+    lk.start()
+    keep = [lk.floor('Ground', 'ObsGround', GROUND, 201.0, 280.0, lambda x, y: 0.0, y1=13.4, ny=12)]
+    keep += lk.hills('Ridge', 'ObsRidge', GROUND, HAZE, [
+        (lambda x: 2.6 + 1.1 * sin(x * 0.16 + 1.0) + 0.5 * sin(x * 0.47), 13.0, 7.0, 0.22),
+        (lambda x: 5.0 + 1.6 * sin(x * 0.09 + 2.6), 26, 12, 0.5),
+        (lambda x: 7.5 + 2.4 * sin(x * 0.05 + 0.4), 46, 16, 0.75),
+    ], 190, 290, fade=(192, 207, None, None), sink=0.4)
+
+    # the volcano behind, with lava lines down the slope facing the camera
+    vx, vy, vr, vh = 222.0, 84.0, 24.0, 20.0
+    rnd = random.Random(5)
+    v = B()
+    v.cone((vx, vy, 0), (vx, vy, vh), vr, vr * 0.2, seg=11)
+    for vert in v.bm.verts:
+        vert.co.x += rnd.uniform(-0.06, 0.06) * vr
+    v.build('Volcano', mat(mix('#231A26', HAZE, 0.45)), smooth=False, shadow=False)
+    lines = B()
+    for a, t0, w in ((-0.18, 0.35, 0.035), (0.1, 0.5, 0.03), (0.3, 0.62, 0.022)):
+        rows = []
+        for i in range(9):
+            t = t0 + (1.0 - t0) * i / 8
+            rt = vr * (1 - 0.8 * t)
+            cx = vx + a * rt * (1 + 0.25 * sin(i * 1.1))
+            rows.append(((cx - w * vr * (1.3 - t), vy - rt, vh * t), (cx + w * vr * (1.3 - t), vy - rt, vh * t)))
+        for (a0, b0), (a1, b1) in zip(rows, rows[1:]):
+            lines.poly((a0, b0, b1, a1))
+    lines.build('LavaLines', mat(pm.LAVA, emit=2.2), smooth=False, shadow=False)
+    pm.plume((vx, vy - 2, vh + 0.5), 3.4)
+    for x, y, w, h in ((214.0, 19.6, 0.45, 3.0), (238.0, 19.7, 0.4, 2.4), (252.0, 19.5, 0.5, 3.4)):
+        pm.lavafall((x, y, 0.3), w, h)
+
+    pm.lava_stream(200, 280, -2.5, 1.7)
+    for x, s, sd in ((206.5, 0.5, 1), (212.4, 0.55, 2), (219.0, 0.35, 3), (224.0, 0.5, 4), (231.0, 0.45, 5), (240.0, 0.5, 6), (249.0, 0.55, 7), (258.0, 0.5, 8)):
+        pm.shards((x, -1.25, 0), 3, s, sd)
+    for x, y, s, sd in ((205.0, 4.5, 1.5, 11), (217.5, 5.5, 1.3, 12), (228.0, 6.5, 1.6, 13)):
+        pm.shards((x, y, 0), 4, s, sd)
+    pm.tortoise((219.5, 0.9, 0), rad(-15), 1.25)
+    keep.append(_spire())
+    pm.nest((268.2, 1.9, LEDGE[2]), 1.1)
+    pm.smoke([(264.8, -1.2, 7.5, 0.2), (265.0, -1.3, 8.0, 0.27), (264.8, -1.35, 8.6, 0.36), (265.1, -1.4, 9.3, 0.46)])
+
+    dragon = _dragon()
+    flag = props.flag_bahrain((273.3, 0.9, PEAK[2]), 2.6, 1.7, 1.0)
+    flag.name = 'SummitFlag'
+    lizards = [pm.lizard((x, y, 0.0), rad(a), 1.25) for x, y, a in ((209.5, -0.7, 20), (216.0, 0.6, 200), (222.5, -0.6, -30))]
+    live = [dragon, flag] + lizards
+
+    top = _top_profile()
+    solids = [dict(x0=X0 - 0.5, x1=262.0, y0=0.0, y1=0.0, kind='ground')]
+    solids += [dict(x0=a[0], x1=b[0], y0=a[1], y1=b[1], kind='breath') for a, b in zip(top, top[1:])]
+    solids += [dict(x0=LEDGE[0], x1=LEDGE[1], y0=LEDGE[2], y1=LEDGE[2], kind='platform'), dict(x0=PEAK[0], x1=PEAK[1], y0=PEAK[2], y1=PEAK[2], kind='platform')]
+    return lk.finish('magma', folder, keep, live, dict(
+        x0=X0, x1=X1, solids=solids,
+        cam=[[234.0, 0.0], [244.0, 2.0], [256.0, 3.2], [262.0, 5.2], [267.0, 6.1], [272.6, 6.9]],
+        zones=[dict(mode='climb', x0=255.5, x1=261.6)],
+        anchors=[dict(id='certificates', x=218.6), dict(id='contact', x=266.6)],
+        titles=[dict(text="DRAGON'S MOUNTAIN", x=204.8)],
+        life=dict(lizards=[209.5, 216.0, 222.5], dragon=dict(x0=226.0, x1=265.2, head=261.0), nest=dict(x=268.2, top=LEDGE[2]),
+                  flag=dict(x=273.3), top=PEAK[2], end=273.5),
+    ))

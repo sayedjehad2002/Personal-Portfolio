@@ -27,3 +27,8 @@ next-env.d.ts
 
 # local tooling
 /.claude/
+
+# Blender working files (rebuilt by blender/scripts; the exported .glb files in /public/world are tracked)
+/blender/*.blend
+/blender/*.blend1
+__pycache__/
