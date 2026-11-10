@@ -216,3 +216,31 @@ def crystals(loc, n=4, s=1.0, seed=0, col='#FF9A3C', emit=1.7):
         hh = s * rnd.uniform(0.4, 1.1)
         b.cone((x, y, loc[2]), (x + rnd.uniform(-0.25, 0.25) * hh, y, loc[2] + hh), 0.16 * s * rnd.uniform(0.7, 1.2), 0.0, seg=5)
     return b.build('Crystals', mat(col, emit=emit, rough=0.3), smooth=False, shadow=False)
+
+
+def hatchling(loc, rz=0.0, s=1.0):
+    """The baby dragon out of the hatching egg: big head, big eyes, stubby wings. Faces +X."""
+    R = root('Hatchling', loc, rz, s)
+    g = G('hatchling')
+    red, belly, bone = '#E4553A', '#FFD9A0', '#FFF1D6'
+    g(red).ball((0, 0, 0.26), (0.24, 0.2, 0.22))
+    g(belly).ball((0.06, 0, 0.21), (0.19, 0.17, 0.17))
+    g(red).chain([(-0.2, 0, 0.2), (-0.42, 0, 0.14), (-0.6, 0, 0.26)], [0.1, 0.06, 0.015], n=7, seg=10)
+    g(red).ball((0.2, 0, 0.56), (0.25, 0.23, 0.22))
+    g(red).ball((0.4, 0, 0.5), (0.15, 0.15, 0.12))
+    for sd in (1, -1):
+        g('#FFFFFF').ball((0.3, sd * 0.15, 0.62), (0.085, 0.05, 0.095))
+        g('#1E1614').ball((0.335, sd * 0.185, 0.62), (0.05, 0.03, 0.06))
+        g('#FFFFFF', emit=0.8).ball((0.35, sd * 0.2, 0.65), 0.018, seg=6, rings=4)
+        g('#7A1F1F').ball((0.52, sd * 0.05, 0.53), 0.018, seg=6, rings=4)
+        g(bone).cone((0.08, sd * 0.13, 0.74), (-0.04, sd * 0.17, 0.9), 0.045, 0.0, seg=7)
+        g(red).ball((0.1, sd * 0.13, 0.05), (0.1, 0.07, 0.05))
+        g(red).limb((0.14, sd * 0.17, 0.3), (0.26, sd * 0.2, 0.2), 0.045, 0.035, seg=8)
+        # stubby wings, half open
+        w0, w1, w2 = (-0.05, sd * 0.16, 0.42), (-0.2, sd * 0.42, 0.66), (-0.36, sd * 0.3, 0.4)
+        g('#F08A4A').poly((w0, w1, w2))
+        g(red).limb(w0, w1, 0.03, 0.012, seg=6)
+    for x in (-0.02, -0.14, -0.26):
+        g(bone).cone((x, 0, 0.46 - 0.3 * abs(x + 0.02)), (x - 0.05, 0, 0.56 - 0.3 * abs(x + 0.02)), 0.035, 0.0, seg=6)
+    g.done(parent=R)
+    return R

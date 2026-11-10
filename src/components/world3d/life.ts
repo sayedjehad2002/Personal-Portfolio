@@ -333,15 +333,22 @@ function snow(scene: THREE.Object3D): Life {
 }
 
 /** how far the dragon's head lifts off the ledge when it wakes (radians, about the base of its skull) */
-export const DRAGON_LIFT = 0.44;
+export const DRAGON_LIFT = 0.78;
 /** The waking, by seconds: the eye opens, the head rises to look at him, the jaws open for the fire and half close. */
 export function dragonWake(t: number) {
-  if (t < 0) return { eye: 0, lift: 0, jaw: 0 };
+  if (t < 0) return { eye: 0, lift: 0, jaw: 0, hatch: 0, perch: 0 };
   const ease = (v: number) => {
     const k = Math.max(0, Math.min(1, v));
     return k * k * (3 - 2 * k);
   };
-  return { eye: ease(t / 0.45), lift: ease((t - 0.5) / 1.3), jaw: ease((t - 1.75) / 0.3) * (1 - 0.7 * ease((t - 3.6) / 0.7)) };
+  // (slowly: the eye, then a long rise as the head comes round to him, then the jaws; the egg hatches after the fire)
+  return {
+    eye: ease(t / 0.5),
+    lift: ease((t - 0.6) / 2.1),
+    jaw: ease((t - 2.7) / 0.3) * (1 - 0.7 * ease((t - 4.5) / 0.7)),
+    hatch: ease((t - 5.2) / 0.45),
+    perch: ease((t - 6.3) / 0.9),
+  };
 }
 
 function magma(scene: THREE.Object3D): Life {
@@ -354,6 +361,9 @@ function magma(scene: THREE.Object3D): Life {
   const head = find(scene, "Dragonhead");
   const jaw = find(scene, "Dragonjaw");
   const lid = find(scene, "Dragonlid");
+  const baby = find(scene, "Hatchling");
+  const babyHome = baby?.position.clone() ?? new THREE.Vector3();
+  let hatched = false;
   const f = { k: 0 };
   const k = { eye: 0, lift: 0, jaw: 0 };
   return {
@@ -371,9 +381,23 @@ function magma(scene: THREE.Object3D): Life {
       if (lid) lid.scale.y = 1 - 0.9 * Math.max(k.eye, twitch);
       if (head) {
         head.rotation.z = k.lift * DRAGON_LIFT + Math.sin(c.time * 1.4) * 0.03 * k.lift;
-        head.rotation.y = -0.3 * k.lift + Math.sin(c.time * 0.9) * 0.05 * k.lift;
+        head.rotation.y = -0.55 * k.lift + Math.sin(c.time * 0.9) * 0.05 * k.lift;
       }
       if (jaw) jaw.rotation.z = -0.62 * k.jaw - 0.04 * k.lift;
+      // after the fire the egg hatches: the baby dragon pops out of the nest, looks about, and hops onto his head
+      if (baby) {
+        if (w.hatch > 0.5 && !hatched) c.emit("nest");
+        hatched = w.hatch > 0.5;
+        const pop = w.hatch * (1 + 0.25 * Math.sin(Math.min(1, w.hatch) * Math.PI));
+        baby.scale.setScalar(Math.max(0.0001, pop));
+        const p = w.perch;
+        baby.position.set(
+          babyHome.x + (c.x - 0.08 - babyHome.x) * p,
+          babyHome.y + (c.y + 1.97 - babyHome.y) * p + Math.sin(p * Math.PI) * 0.9 + Math.abs(Math.sin(c.time * 3)) * 0.05 * w.hatch,
+          babyHome.z + (0.0 - babyHome.z) * p,
+        );
+        baby.rotation.z = Math.sin(c.time * 2.2) * 0.08 * w.hatch;
+      }
       if (flag) {
         // he plants the flag when he reaches the very top
         f.k += ((c.x > L.flag.x - 1.4 && c.y > L.top - 0.4 ? 1 : 0) - f.k) * Math.min(1, c.dt * 4);

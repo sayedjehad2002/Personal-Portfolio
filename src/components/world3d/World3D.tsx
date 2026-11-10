@@ -9,7 +9,7 @@ import { QuickResumeDialog, ResumeText } from "@/components/QuickResume";
 import { scrollToY, useLenis } from "@/components/SmoothScroll";
 import { Icon } from "@/components/ui/Icon";
 import { WheelHint } from "@/components/ui/WheelHint";
-import { profile, stats } from "@/data/resume";
+import { profile, stats, values } from "@/data/resume";
 import { motion, useMotionPaused } from "@/lib/motion";
 import { sfx, useSoundOn } from "@/lib/sfx";
 import { audio, type SoundName } from "./audio";
@@ -74,12 +74,15 @@ const DRAGON = LEVELS.magma.life.dragon;
 const NEST = LEVELS.magma.life.nest;
 /** the dragon's nostril, where its breath shows (world position) */
 const NOSTRIL = [264.6, 7.0, 1.3];
-/** the light of the last shot, when all four realms are in view: a little of each land's sky */
-const OVERVIEW = [0.4, 0, 0.36, 0.24];
-/** an upright screen cannot fit the walk across, so its last shot glides back over it: that takes more scroll */
-const EPILOGUE_NARROW = 34;
-/** the scroll after the top that brings in the final card (the same on every screen now that nothing pulls back) */
-const epilogueFor = (_vw: number) => Math.min(7, EPILOGUE, EPILOGUE_NARROW);
+/** the scroll after the top that brings in the final card (the camera stays at the summit: Sayed did not want a
+ *  zoom-out over the whole world) */
+const CARD_SCROLL = Math.min(7, EPILOGUE);
+/** short lines on the stretches with nothing else to read: his three mottos along the ice, three of his numbers up
+ *  the dragon's back (all from the CV) */
+const NOTES = [
+  ...values.map((v, i) => ({ x: 128.2 + i * 4.6, text: v.motto })),
+  ...stats.slice(0, 3).map((sv, i) => ({ x: 233.5 + i * 7.5, text: `${sv.value} ${sv.label.toLowerCase()}` })),
+];
 /** the loading screen: one bar per realm, and what is being built */
 const LOAD_COLORS = ["#F2B45C", "#3FD0C9", "#9DB4FF", "#FF7A3D"];
 const LOAD_LINES = ["Raising the dunes", "Filling the Gulf", "Freezing the lake", "Waking the volcano", "Opening the gates"];
@@ -107,8 +110,6 @@ const GEMS = (
     [231, 253, 2.2, 0],
   ] as const
 ).flatMap(([a, b, step, swim]) => Array.from({ length: Math.floor((b - a) / step) + 1 }, (_, i) => ({ x: a + i * step, y: pathY(a + i * step) + (swim || (i % 3 === 2 ? 2.05 : 1.0)), realm: realmAt(a + i * step) })));
-/** the trail that lights up along the whole walk in the last shot: one light every 1.6 units */
-const TRAIL = Array.from({ length: Math.floor(WORLD_END / 1.6) + 1 }, (_, i) => ({ x: i * 1.6, y: pathY(i * 1.6) + 0.5, realm: realmAt(i * 1.6) }));
 /** the base of the dragon's skull (the hinge its head lifts about) and its mouth measured from there */
 const DRAGON_NECK = [261, 5.8];
 const DRAGON_MOUTH = [3.4, 0.9];
@@ -157,10 +158,11 @@ type Sim = {
   onGems: ((n: number) => void) | null;
   onQuality: ((q: number) => void) | null;
   dom: {
-    boards: Map<string, { el: HTMLElement; w: number }>;
+    boards: Map<string, { el: HTMLElement; w: number; h: number; off: number; side: number }>;
     titles: Map<number, HTMLElement>;
     skies: (HTMLElement | null)[];
-    labels: (HTMLElement | null)[];
+    notes: (HTMLElement | null)[];
+    intro: HTMLElement | null;
     final: HTMLElement | null;
     nums: (HTMLElement | null)[];
     trail: HTMLElement | null;
@@ -195,7 +197,7 @@ const createSim = (): Sim => ({
   onReveal: null,
   onGems: null,
   onQuality: null,
-  dom: { boards: new Map(), titles: new Map(), skies: [], labels: [], final: null, nums: [], trail: null, sun: null, moon: null, tint: null, heat: null, hint: null, fps: null },
+  dom: { boards: new Map(), titles: new Map(), skies: [], notes: [], intro: null, final: null, nums: [], trail: null, sun: null, moon: null, tint: null, heat: null, hint: null, fps: null },
 });
 
 type Lives = Partial<Record<RealmId, { life: Life; root: THREE.Object3D }>>;
@@ -279,7 +281,6 @@ function Scene({ sim, small, quality }: { sim: Sim; small: boolean; quality: num
       at: Array.from({ length: 13 }, (_, i) => ({ x: i * 26 + (i % 3) * 7 - 20, y: 10.5 + ((i * 37) % 7), z: -40 - ((i * 53) % 24), s: 1.4 + ((i * 29) % 5) * 0.32 })),
     };
   }, []);
-  const trailRef = useRef<THREE.InstancedMesh>(null);
   const fx = useMemo(() => new Fx(200), []);
 
   // realm colours, parsed once
@@ -461,15 +462,8 @@ function Scene({ sim, small, quality }: { sim: Sim; small: boolean; quality: num
     }
     const L = lenisRef.current;
     const raw = Math.max(0, (L ? L.animatedScroll : window.scrollY) / u);
-    // past the summit the scroll no longer moves him: it pulls the camera back over the whole walk. An upright
-    // screen cannot fit the walk across, so there the camera pulls back and then glides back over it to the start.
-    const epiRaw = Math.max(0, Math.min(1, (raw - WORLD_END) / epilogueFor(vw)));
-    // (Sayed asked on 10 Nov 2026 for the ending to stay in the Magma realm: the camera no longer pulls back over
-    // the whole walk. The last stretch of scroll only brings in the final card. `epi` and `pan` stay at 0, which
-    // switches the pull-back code below off without removing it.)
-    const card = smooth(epiRaw);
-    const epi: number = 0;
-    const pan: number = 0;
+    // past the summit the scroll no longer moves him: it brings in the final card
+    const card = smooth(Math.max(0, Math.min(1, (raw - WORLD_END) / CARD_SCROLL)));
     sim.qa.overview = card;
 
     // ---- the dragon breathes: its back (and the floor he walks there) rises and falls
@@ -591,7 +585,6 @@ function Scene({ sim, small, quality }: { sim: Sim; small: boolean; quality: num
     st.camOff += (camOffset(x) - st.camOff) * Math.min(1, teleport ? 1 : dt * 3.5);
     const under = smooth((SEA + 0.25 - (CAM_Y + st.camOff)) / 1.3);
     const w = realmWeights(x, under, st.weights);
-    for (let i = 0; i < 4; i++) w[i] += (OVERVIEW[i] - w[i]) * epi;
     const realm = w.indexOf(Math.max(...w));
 
     // ---- what he does makes sound and kicks things up
@@ -650,24 +643,24 @@ function Scene({ sim, small, quality }: { sim: Sim; small: boolean; quality: num
       st.wakeAt = time;
       st.roared = false;
       st.fireworks = 9;
-      st.nextFw = time + 2.7;
+      st.nextFw = time + 3.6;
     } else if (x < LEVELS.magma.life.flag.x - 3) {
       st.atTop = false;
       st.wakeAt = -1;
     }
     const wakeT = st.wakeAt >= 0 ? time - st.wakeAt : -1;
-    if (wakeT > 0.7 && !st.roared) {
+    if (wakeT > 1.1 && !st.roared) {
       st.roared = true;
       say("roar");
       if (!calm) st.shakeV -= 1.8;
     }
-    if (wakeT > 2.0 && wakeT < 3.5) {
+    if (wakeT > 2.9 && wakeT < 4.4) {
       // a plume of fire from its open jaws, up over his head
       const a = dragonWake(wakeT).lift * DRAGON_LIFT;
       const mx = DRAGON_NECK[0] + DRAGON_MOUTH[0] * Math.cos(a) - DRAGON_MOUTH[1] * Math.sin(a);
       const my = DRAGON_NECK[1] + DRAGON_MOUTH[0] * Math.sin(a) + DRAGON_MOUTH[1] * Math.cos(a);
       for (let k = 0; k < 3; k++) {
-        const dir = a + 0.5 + rnd(-0.2, 0.2);
+        const dir = a + 0.12 + rnd(-0.2, 0.2);
         const v = rnd(7, 11.5);
         fx.spawn(mx, my, 0.4, Math.cos(dir) * v, Math.sin(dir) * v, rnd(-0.7, 0.7), rnd(0.5, 0.85), 0.14, rnd(0.45, 0.7), k ? (k > 1 ? "#FF5A1F" : "#FF9A2E") : "#FFE9A0", -1.4);
       }
@@ -681,7 +674,7 @@ function Scene({ sim, small, quality }: { sim: Sim; small: boolean; quality: num
     }
     if (!calm) {
       // his breath shows in the cold
-      if (w[2] > 0.6 && !swimming && epi < 0.05 && time - st.lastBreath > 2.7) {
+      if (w[2] > 0.6 && !swimming && time - st.lastBreath > 2.7) {
         st.lastBreath = time;
         for (let k = 0; k < 3; k++) fx.spawn(x + st.facing * (0.5 + k * 0.1), sim.y + 1.2 + k * 0.04, 0.2, st.facing * rnd(0.3, 0.5), rnd(0.1, 0.25), 0, 1.1, 0.05, 0.16 + k * 0.03, "#FFFFFF");
       }
@@ -691,7 +684,7 @@ function Scene({ sim, small, quality }: { sim: Sim; small: boolean; quality: num
         if (Math.abs(x - NOSTRIL[0]) < 22) say("puff");
       }
       // the lava river spits sparks
-      if (w[3] > 0.3 && epi < 0.05 && time - st.lastPop > 0.3) {
+      if (w[3] > 0.3 && time - st.lastPop > 0.3) {
         st.lastPop = time;
         const px = sim.camX + rnd(-visW / 2, visW / 2);
         for (let k = 0; k < 3; k++) fx.spawn(px + rnd(-0.2, 0.2), 0.1, 2.5, rnd(-0.6, 0.6), rnd(2.2, 3.8), rnd(-0.3, 0.3), 0.85, 0.05, 0, k ? "#FFB04A" : "#FFE08A", 7);
@@ -789,25 +782,12 @@ function Scene({ sim, small, quality }: { sim: Sim; small: boolean; quality: num
     // it also looks a little ahead of the way he is going, so more of the world is in front of him than behind
     const aheadTo = quiet ? 0 : Math.max(-1, Math.min(1, speed * 0.085)) * Math.min(1.15, visW * 0.065);
     st.ahead += (aheadTo - st.ahead) * Math.min(1, dt * (Math.abs(aheadTo) > Math.abs(st.ahead) ? 1.8 : 1.1));
-    sim.camX = x + ((0.5 - playerAt) * visW) / sim.zoom - Math.min(5, visW * 0.2) * fin + st.ahead * (1 - fin);
+    sim.camX = x + ((0.5 - playerAt) * visW) / sim.zoom - Math.min(7.5, visW * 0.3) * fin + st.ahead * (1 - fin);
     sim.heroPx = (x - sim.camX) * u * sim.zoom + vw / 2;
     const camDx = quiet ? 0 : sim.camX - st.prevCamX;
     st.prevCamX = sim.camX;
     cam.position.set(sim.camX, CAM_Y + sim.camY + st.shake * 0.12, dist);
     cam.rotation.set(0, 0, 0);
-    if (epi > 0) {
-      // far enough back for the whole walk to fit across the screen; on an upright screen a third of it fits, and
-      // the shot then glides from the summit back to the first dune
-      const span = 2 * Math.tan((cam.fov * Math.PI) / 360) * (vw / vh);
-      const D = Math.min(narrow ? 330 : 620, (WORLD_END + 30) / span);
-      const half = (D * span) / 2;
-      const cx = WORLD_END + 12 - half + (half - 14 - (WORLD_END + 12 - half)) * pan;
-      // (from a little above, so the land has depth and fills more of the screen than a thin strip would)
-      cam.position.lerp(tmp.v.set(cx, D * 0.17, D * 0.985), epi);
-      cam.lookAt(sim.camX + (cx - sim.camX) * epi, (CAM_Y + sim.camY) * (1 - epi) + 3 * epi, 0);
-      // (lookAt leaves the camera's matrices half updated; the labels below are placed with them)
-      cam.updateMatrixWorld();
-    }
     const pe = cam.projectionMatrix.elements;
     if (Math.abs(pe[9] - 2 * SHIFT) > 1e-6) {
       pe[9] = 2 * SHIFT;
@@ -860,18 +840,18 @@ function Scene({ sim, small, quality }: { sim: Sim; small: boolean; quality: num
       sun.target.updateMatrixWorld();
     }
     if (lavaRef.current) {
-      lavaRef.current.intensity = 26 * w[3] * (1 - epi);
+      lavaRef.current.intensity = 26 * w[3];
       lavaRef.current.position.set(x + 0.6, st.camOff * 0.2 + 0.5, 3.2);
     }
     // the eggs light the nest
     if (nestRef.current) nestRef.current.intensity = lives.current.magma ? 30 + 6 * Math.sin(amb * 2.3) : 0;
-    if (sim.dom.sun) sim.dom.sun.style.opacity = String(w[0] * (1 - epi));
-    if (sim.dom.moon) sim.dom.moon.style.opacity = String(w[2] * (1 - epi));
+    if (sim.dom.sun) sim.dom.sun.style.opacity = String(w[0]);
+    if (sim.dom.moon) sim.dom.moon.style.opacity = String(w[2]);
     // under water the whole view takes a blue cast; near the lava the bottom of the screen glows
     if (sim.dom.tint) sim.dom.tint.style.opacity = (under * 0.2).toFixed(3);
-    if (sim.dom.heat) sim.dom.heat.style.opacity = (w[3] * (1 - epi) * (0.55 + 0.12 * Math.sin(amb * 1.7))).toFixed(3);
+    if (sim.dom.heat) sim.dom.heat.style.opacity = (w[3] * (0.55 + 0.12 * Math.sin(amb * 1.7))).toFixed(3);
     if (realm !== st.realm) {
-      if (st.realm >= 0 && !teleport && epi === 0) say("realm", realm);
+      if (st.realm >= 0 && !teleport) say("realm", realm);
       st.realm = realm;
       sim.qa.realm = realm;
       sim.onRealm?.(realm);
@@ -890,7 +870,7 @@ function Scene({ sim, small, quality }: { sim: Sim; small: boolean; quality: num
       time,
     });
     if (skyRef.current) skyRef.current.position.set(sim.camX, sim.camY, 0);
-    const night = 1 - epi;
+    const night = 1;
     sky.starsMat.uniforms.uOpacity.value = Math.min(1, w[2] + w[3] * 0.7) * night;
     sky.aurora[0].uniforms.uOpacity.value = w[2] * 0.6 * night;
     sky.aurora[1].uniforms.uOpacity.value = w[2] * 0.42 * night;
@@ -974,23 +954,6 @@ function Scene({ sim, small, quality }: { sim: Sim; small: boolean; quality: num
       });
       gems.instanceMatrix.needsUpdate = true;
     }
-    // ---- the last shot: a trail of light runs the whole walk, from the first dune to the top
-    const trail = trailRef.current;
-    if (trail) {
-      trail.visible = epi > 0.01;
-      if (trail.visible) {
-        if (!trail.instanceColor) TRAIL.forEach((t, i) => trail.setColorAt(i, tmp.c.set(LOAD_COLORS[t.realm])));
-        const lit = narrow ? WORLD_END + 9 : smooth((epi - 0.3) / 0.6) * (WORLD_END + 9);
-        TRAIL.forEach((t, i) => {
-          const k = smooth((lit - t.x) / 8) * (1.5 + 0.35 * Math.sin(amb * 3 - t.x * 0.35));
-          tmp.m.compose(tmp.v.set(t.x, t.y, 0.8), tmp.q.identity(), tmp.s.set(k, k, k));
-          trail.setMatrixAt(i, tmp.m);
-        });
-        trail.instanceMatrix.needsUpdate = true;
-        if (trail.instanceColor) trail.instanceColor.needsUpdate = true;
-      }
-    }
-
     // ---- the world reacts: prints behind him (sand, snow, glowing stone), dust and spray, bubbles under water
     const prints = printsRef.current;
     if (prints) {
@@ -1079,7 +1042,7 @@ function Scene({ sim, small, quality }: { sim: Sim; small: boolean; quality: num
     for (const r of REALMS) {
       const live = lives.current[r.id];
       if (!live) continue;
-      live.root.visible = (!st.revealed && all) || epi > 0.01 || (sim.camX > r.x0 - 95 && sim.camX < r.x1 + 95);
+      live.root.visible = (!st.revealed && all) || (sim.camX > r.x0 - 95 && sim.camX < r.x1 + 95);
       if (live.root.visible) live.life.update({ x, y: sim.y, camX: sim.camX, dt, time: amb, running: st.running && moving, breath, wake: wakeT, emit: say });
     }
     sim.qa.loaded = Object.keys(lives.current);
@@ -1117,16 +1080,27 @@ function Scene({ sim, small, quality }: { sim: Sim; small: boolean; quality: num
       const b = sim.dom.boards.get(a.id);
       if (!b) continue;
       const sx = px(a.x);
-      // boards appear as they reach the screen and go again once they are behind him; in the last shot only
-      // the contact card stays
-      const last = a.id === "contact" && x > DRAGON.x1 + 0.3;
+      // boards appear as they reach the screen and go again once they are behind him; the final card replaces them
       const on = (card > 0.25 ? false : narrow ? dock === a.id : sx < vw * 0.9 && sx > vw * 0.07) ? "1" : "0";
       if (b.el.dataset.on !== on) {
         b.el.dataset.on = on;
         if (on === "1" && !quiet) say("board");
       }
       if (on === "1") shown.push(a.id);
-      const at = narrow ? (vw - b.w) / 2 : epi > 0.02 && last ? Math.max(vw * 0.04, sx - b.w / 2) * (1 - epi) + vw * 0.04 * epi : sx - b.w / 2;
+      // a card never sits on his head: when it would (a tall card, or he is high on the screen), it steps to the
+      // side it is already on and stays there until he has passed
+      const base = sx - b.w / 2;
+      let off = 0;
+      if (!narrow && on === "1") {
+        const headY = (sim.topZ - (sim.y + CHAR_H + 0.2)) * u;
+        const reach = 0.75 * u;
+        if (headY < vh * 0.14 + b.h + 8 && base < sim.heroPx + reach && base + b.w > sim.heroPx - reach) {
+          if (!b.side) b.side = sx < sim.heroPx ? -1 : 1;
+          off = b.side < 0 ? sim.heroPx - reach - (base + b.w) : sim.heroPx + reach - base;
+        } else b.side = 0;
+      } else b.side = 0;
+      b.off += (off - b.off) * Math.min(1, dt * 7);
+      const at = narrow ? (vw - b.w) / 2 : base + b.off;
       if (narrow ? on === "1" || st.docked !== "phone" : sx > -900 && sx < vw + 900) b.el.style.transform = `translate3d(${at.toFixed(1)}px,0,0)`;
     }
     st.docked = narrow ? "phone" : "";
@@ -1143,19 +1117,17 @@ function Scene({ sim, small, quality }: { sim: Sim; small: boolean; quality: num
       if (near) el.style.transform = `translate3d(${sx.toFixed(1)}px,0,0)`;
       else if (el.dataset.near !== "0") el.style.transform = "translate3d(-300vw,0,0)";
       el.dataset.near = near ? "1" : "0";
-      el.style.opacity = String(1 - Math.min(1, epi * 4));
     });
-    // in the last shot each realm gets its name, over the place it lies
-    REALMS.forEach((r, i) => {
-      const el = sim.dom.labels[i];
+    NOTES.forEach((n, i) => {
+      const el = sim.dom.notes[i];
       if (!el) return;
-      el.style.opacity = epi.toFixed(3);
-      if (epi < 0.01) return;
-      // on the ground in front of its stretch of the walk
-      tmp.v.set((r.x0 + Math.min(r.x1, WORLD_END)) / 2, 0, 34).project(cam);
-      el.style.transform = `translate3d(${((tmp.v.x * 0.5 + 0.5) * vw).toFixed(1)}px,${((-tmp.v.y * 0.5 + 0.5) * vh).toFixed(1)}px,0) translate(-50%,-50%)`;
+      const sx = px(n.x);
+      const k = sx > -400 && sx < vw + 400 ? smooth(1.25 - Math.abs(n.x - x) / 5.5) : 0;
+      el.style.opacity = k.toFixed(3);
+      if (k > 0) el.style.transform = `translate3d(${sx.toFixed(1)}px,${((1 - k) * 14).toFixed(1)}px,0) translate(-50%,0)`;
     });
-    // the last card comes in once the camera is nearly back, and its numbers count up
+    if (sim.dom.intro) sim.dom.intro.style.opacity = (1 - smooth((raw - 0.6) / 2.2)).toFixed(3);
+    // the last card comes in with the last of the scroll, and its numbers count up
     const fin2 = smooth((card - 0.15) / 0.6);
     if (sim.dom.final) {
       sim.dom.final.style.opacity = fin2.toFixed(3);
@@ -1220,10 +1192,6 @@ function Scene({ sim, small, quality }: { sim: Sim; small: boolean; quality: num
       <instancedMesh ref={cloudsRef} args={[clouds.geo, clouds.mat, clouds.at.length]} frustumCulled={false} />
       <instancedMesh ref={gemsRef} args={[undefined, undefined, GEMS.length]} frustumCulled={false}>
         <octahedronGeometry args={[0.2, 0]} />
-        <meshBasicMaterial />
-      </instancedMesh>
-      <instancedMesh ref={trailRef} args={[undefined, undefined, TRAIL.length]} frustumCulled={false} visible={false}>
-        <icosahedronGeometry args={[0.5, 1]} />
         <meshBasicMaterial />
       </instancedMesh>
       <group ref={skyRef}>
@@ -1442,24 +1410,24 @@ function Loader({ progress, done, sound, onSound, onResume }: { progress: number
           {LOAD_LINES[step]}
           <span className="text-white/70"> · {pct}%</span>
         </p>
-        <div className="mt-7">
+        <button
+          type="button"
+          onClick={onSound}
+          aria-pressed={sound}
+          tabIndex={done ? -1 : 0}
+          className={`sound-choice mt-7 flex items-center gap-2.5 rounded-full px-6 py-3 font-display text-lg shadow-[0_10px_26px_-10px_rgba(0,0,0,0.7)] transition-colors ${sound ? "bg-[#3FD0C9] text-ink" : "bg-white text-ink hover:bg-[#FFF3D6]"}`}
+          data-on={sound ? "1" : "0"}
+        >
+          <Icon name={sound ? "speaker-on" : "speaker-off"} className="size-5" />
+          {sound ? "Sound is on" : "Play with sound"}
+        </button>
+        <p className="mt-2 text-xs font-bold text-white/70">{sound ? "Music and effects in every realm" : "Best with sound: each realm has its own music"}</p>
+        <div className="mt-5">
           <WheelHint />
         </div>
-        <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
-          <button
-            type="button"
-            onClick={onSound}
-            aria-pressed={sound}
-            tabIndex={done ? -1 : 0}
-            className={`flex items-center gap-2 rounded-full border-2 px-4 py-2 text-sm font-extrabold transition-colors ${sound ? "border-white bg-white text-ink" : "border-white/70 bg-white/10 text-white hover:bg-white/20"}`}
-          >
-            <Icon name={sound ? "speaker-on" : "speaker-off"} className="size-4" />
-            {sound ? "Sound is on" : "Play with sound"}
-          </button>
-          <button type="button" onClick={onResume} tabIndex={done ? -1 : 0} className="rounded-full px-3 py-1.5 text-sm font-bold text-white/85 underline decoration-white/50 underline-offset-4 hover:text-white">
-            Or read the plain resume
-          </button>
-        </div>
+        <button type="button" onClick={onResume} tabIndex={done ? -1 : 0} className="mt-4 rounded-full px-3 py-1.5 text-sm font-bold text-white/85 underline decoration-white/50 underline-offset-4 hover:text-white">
+          Or read the plain resume
+        </button>
       </div>
     </div>
   );
@@ -1550,7 +1518,10 @@ export function World3D() {
       setVp({ w: window.innerWidth, h: window.innerHeight });
       // phones and small tablets get a lighter picture: fewer pixels, a smaller shadow map
       setSmall(window.matchMedia("(pointer: coarse)").matches || Math.min(window.innerWidth, window.innerHeight) < 600);
-      for (const b of sim.dom.boards.values()) b.w = b.el.offsetWidth;
+      for (const b of sim.dom.boards.values()) {
+        b.w = b.el.offsetWidth;
+        b.h = b.el.offsetHeight;
+      }
     };
     on();
     window.addEventListener("resize", on);
@@ -1573,9 +1544,7 @@ export function World3D() {
       lenis,
       audio: () => audio.state(),
       end: WORLD_END,
-      get epilogue() {
-        return epilogueFor(window.innerWidth);
-      },
+      epilogue: CARD_SCROLL,
       goto: (x: number) => scrollToY(lenis, x * (window.innerHeight / viewHFor(window.innerWidth, window.innerHeight)), true),
       stats: () => {
         const s = [...sim.frames].sort((a, b) => a - b);
@@ -1592,7 +1561,7 @@ export function World3D() {
   const pill = "pointer-events-auto rounded-full bg-white/85 text-sm font-bold text-ink shadow-md hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink";
   const round = `${pill} grid h-10 w-10 shrink-0 place-items-center`;
   return (
-    <div style={{ height: u ? (WORLD_END + epilogueFor(vp.w)) * u + vp.h : "100vh", background: "#232B63" }}>
+    <div style={{ height: u ? (WORLD_END + CARD_SCROLL) * u + vp.h : "100vh", background: "#232B63" }}>
       <div
         ref={stage}
         className="sticky top-0 h-dvh w-full touch-pan-y overflow-hidden"
@@ -1675,18 +1644,25 @@ export function World3D() {
           );
         })}
 
-        {/* the last shot: the name of each realm over the place it lies */}
-        {REALMS.map((r, i) => (
+        {/* the first screen says who he is before a single step */}
+        <div ref={(el) => void (sim.dom.intro = el)} className="pointer-events-none absolute left-[4%] top-[19%] max-w-[min(34rem,60vw)] text-white max-sm:inset-x-0 max-sm:left-0 max-sm:top-[9.75rem] max-sm:max-w-none max-sm:px-5 max-sm:text-center">
+          <p className="font-display text-[clamp(2rem,6.2vh,3.6rem)] leading-[1.05] [text-shadow:0_3px_0_#B9772F,0_10px_24px_rgba(0,0,0,0.3)]">{profile.name}</p>
+          <p className="mt-2 inline-block rounded-full bg-ink/75 px-4 py-1.5 text-sm font-extrabold sm:text-base">
+            {profile.subtitle} · {profile.base}
+          </p>
+        </div>
+
+        {/* a line to read on the stretches that have no card */}
+        {NOTES.map((n, i) => (
           <p
-            key={r.id}
-            ref={(el) => void (sim.dom.labels[i] = el)}
-            aria-hidden="true"
-            style={{ "--accent": r.accent } as React.CSSProperties}
-            className="pointer-events-none absolute left-0 top-0 font-display text-[clamp(1.1rem,3.4vh,2.2rem)] uppercase leading-none tracking-wide text-white opacity-0 [text-shadow:0_2px_0_var(--accent),0_6px_16px_rgba(0,0,0,0.45)]"
+            key={n.x}
+            ref={(el) => void (sim.dom.notes[i] = el)}
+            className="pointer-events-none absolute left-0 top-[30%] whitespace-nowrap rounded-full bg-white/90 px-4 py-1.5 font-display text-[clamp(0.95rem,2.6vh,1.35rem)] text-ink opacity-0 shadow-lg max-sm:top-[24%] max-sm:text-sm"
           >
-            {r.label}
+            {n.text}
           </p>
         ))}
+
         {/* the last card: the walk is over, here is how to reach him */}
         <section
           ref={(el) => void (sim.dom.final = el)}
@@ -1743,7 +1719,7 @@ export function World3D() {
           return (
             <article
               key={a.id}
-              ref={(el) => void (el ? sim.dom.boards.set(a.id, { el, w: el.offsetWidth }) : sim.dom.boards.delete(a.id))}
+              ref={(el) => void (el ? sim.dom.boards.set(a.id, { el, w: el.offsetWidth, h: el.offsetHeight, off: 0, side: 0 }) : sim.dom.boards.delete(a.id))}
               data-on="0"
               data-x={a.x}
               data-realm={a.realm}

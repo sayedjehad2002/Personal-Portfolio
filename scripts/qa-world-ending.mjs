@@ -28,7 +28,7 @@ await page.screenshot({ path: `${out}/e1-nest.png` });
 await page.keyboard.down("ArrowRight");
 await page.waitForFunction(() => window.__world.sim.x >= 273.4, null, { timeout: 30000 });
 await page.keyboard.up("ArrowRight");
-for (const [name, ms] of [["e2-eye-opens", 900], ["e3-head-up", 1100], ["e4-fire", 900], ["e5-fireworks", 1400]]) {
+for (const [name, ms] of [["e2-eye-opens", 900], ["e3-head-up", 1700], ["e4-fire", 1100], ["e5-fireworks", 1400], ["e5b-baby-dragon", 3200]]) {
   await page.waitForTimeout(ms);
   await page.screenshot({ path: `${out}/${name}.png` });
 }

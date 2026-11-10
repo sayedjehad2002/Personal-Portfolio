@@ -2,6 +2,18 @@
 
 Status: **shipped.** On 10 Nov 2026 the four-realm world replaced the old ice-world site at `/` (Phase 8). Sayed asked for the old site to be removed, not kept or tagged; it is only in git history (up to commit d2a1d65). The notes below are the history of how it got here, newest first; where they mention `/v2`, `qa-v2.mjs` or story mode, that was the state at the time. Screenshots of the shipped world are in `docs/play/`, the approved look renders in `docs/look/`.
 
+Ten-point pass (10 Nov 2026, from the "what would make it 10/10" list). Not pushed yet.
+- First screen: his name and "AI System Developer · Human Resources · Bahrain" are on screen before a step is taken.
+- Cards step aside instead of covering him (they move to the side they are on and stay there until he has passed).
+- The dragon's wake is bigger and slower (the head lifts 0.78 rad and turns towards him), then the egg hatches and a baby dragon hops onto his head. The camera keeps the dragon in view at the top.
+- Sound is the first choice on the loading screen (a large pulsing button); the world still opens by itself.
+- Lines on the quiet stretches, all from the CV: his three mottos along the ice, three of his numbers up the dragon's back.
+- Desert: two tents with Sadu bands, a well, clay jars, an oasis pool with three more palms, hanging dates.
+- Clean-up: the switched-off zoom-out code, the trail of light and the realm labels are deleted.
+- A recorded walkthrough: `node scripts/record-walkthrough.mjs` writes `docs/video/sayed-jehad-world-walkthrough.mp4` (2 min 02 s, 1280x720, no sound; not in git).
+- Speed: not improved. Palm fronds were simplified, but the Desert grew with the camp (218k triangles). Clean runs at 1366x657 on the production build: p95 14.8 to 15.2 ms per realm.
+- Not possible from here: the real-phone test in LinkedIn's in-app browser.
+
 The sea, same day (Sayed: still cut, too many colours): everything under water now melts into one sea colour with distance (floor, reefs, props, the surface from below, the ice from below and the sky behind), hill rows that have sunk under sea level are no longer drawn (they showed as bands across the water), and there is a third school of banded coral fish, with every fish a slightly different size and colour. Final check on the production build: no console errors at 1366x657 and 390x844; frame time p95 14.6 to 14.9 ms per realm at 1366x657 and 13.8 to 14.0 ms at phone size (one 120 ms frame in Snow).
 
 Correction, same day: Sayed did not want the zoom-out at the end ("keep it in the magma"). The pull-back, the trail of light and the realm labels are switched off; the ending stays at the summit and the last 7 units of scroll bring in the final card beside him.

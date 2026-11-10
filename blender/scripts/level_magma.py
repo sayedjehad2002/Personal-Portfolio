@@ -242,7 +242,8 @@ def export(folder):
     flag = props.flag_bahrain((273.3, 0.9, PEAK[2]), 2.6, 1.7, 1.0)
     flag.name = 'SummitFlag'
     lizards = [pm.lizard((x, y, 0.0), rad(a), 1.25) for x, y, a in ((209.5, -0.7, 20), (216.0, 0.6, 200), (222.5, -0.6, -30))]
-    live = [dragon, flag] + lizards
+    baby = pm.hatchling((268.7, 0.75, LEDGE[2]), rad(160), 1.0)
+    live = [dragon, flag, baby] + lizards
 
     top = _top_profile()
     solids = [dict(x0=X0 - 0.5, x1=262.0, y0=0.0, y1=0.0, kind='ground')]

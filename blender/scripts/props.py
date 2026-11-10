@@ -7,7 +7,7 @@ from kit import B, G, mat, mix, root, glow, quad, strip, fade_mat
 
 # ------------------------------------------------------------------ desert
 
-def _frond(b, top, az, length, width, droop, n=7):
+def _frond(b, top, az, length, width, droop, n=5):
     top = Vector(top)
     d = Vector((cos(az), sin(az), 0))
     p = Vector((-sin(az), cos(az), 0))
@@ -196,3 +196,51 @@ def flock(center, n=6, s=1.0, col='#5A4A44'):
         for w in (1, -1):
             b.poly((p, p + Vector((-0.15 * s, 0, 0.0)), p + Vector((-0.3 * s + 0.05 * s * w, 0, w * 0.42 * s + 0.12 * s))))
     return b.build('Flock', mat(col), smooth=False, shadow=False)
+
+
+def tent(loc, rz=0.0, s=1.0, cloth='#F1E4CB', band='#B23A3A'):
+    """A Bedouin tent: a long low ridge of cloth on poles, with Sadu bands and an open front."""
+    R = root('Tent', loc, rz, s)
+    g = G('tent')
+    ridge = [(-1.9, 0, 1.25), (-0.65, 0, 1.6), (0.65, 0, 1.6), (1.9, 0, 1.25)]
+    for (a, b_) in zip(ridge, ridge[1:]):
+        for sd in (1, -1):
+            g(cloth).poly((a, b_, (b_[0] * 1.12, sd * 1.5, 0.0), (a[0] * 1.12, sd * 1.5, 0.0)))
+    for x in (-1.3, 0.0, 1.3):
+        g(band).poly(((x - 0.09, -0.02, 1.47 if abs(x) < 1 else 1.33), (x + 0.09, -0.02, 1.47 if abs(x) < 1 else 1.33), (x * 1.12 + 0.1, -1.52, 0.02), (x * 1.12 - 0.1, -1.52, 0.02)))
+        g('#1E1A1C').poly(((x + 0.11, -0.03, 1.46 if abs(x) < 1 else 1.32), (x + 0.16, -0.03, 1.45 if abs(x) < 1 else 1.31), (x * 1.12 + 0.18, -1.53, 0.02), (x * 1.12 + 0.12, -1.53, 0.02)))
+    g('#3A2A22').poly(((-0.5, -1.2, 0.02), (0.5, -1.2, 0.02), (0.0, -0.45, 1.05)))
+    for x in (-1.9, -0.65, 0.65, 1.9):
+        g('#8A6A44').limb((x, 0, 0), (x, 0, 1.3 if abs(x) > 1 else 1.66), 0.035, seg=6)
+    for x, y in ((-2.5, -1.9), (2.5, -1.9), (-2.5, 1.9), (2.5, 1.9)):
+        g('#8A6A44').limb((x * 0.76, y * 0.78, 0.9 if abs(y) < 1.6 else 0.02), (x, y, 0.02), 0.012, seg=5)
+    g.done(parent=R, smooth=False)
+    return R
+
+
+def jars(loc, s=1.0, col='#C98F5A'):
+    """Clay water jars standing together."""
+    b = B()
+    x, y, z = loc
+    for dx, dy, k in ((0, 0, 1.0), (0.42, 0.1, 0.75), (-0.3, 0.3, 0.6)):
+        r = 0.2 * s * k
+        b.ball((x + dx * s, y + dy * s, z + r * 1.25), (r, r, r * 1.3), seg=14, rings=10)
+        b.cone((x + dx * s, y + dy * s, z + r * 2.3), (x + dx * s, y + dy * s, z + r * 2.75), r * 0.42, r * 0.55, seg=10)
+    return b.build('Jars', mat(col, rough=0.8))
+
+
+def well(loc, s=1.0):
+    """A stone well with a wooden frame and bucket."""
+    R = root('Well', loc, scale=s)
+    g = G('well')
+    for i in range(10):
+        a = 2 * pi * i / 10
+        g('#C9AE86' if i % 2 else '#B79A6F').rbox((0.55 * cos(a), 0.55 * sin(a), 0.22), (0.36, 0.22, 0.44), 0.03, rot=(0, 0, a + pi / 2))
+    g('#2F6F7A').ball((0, 0, 0.3), (0.42, 0.42, 0.02))
+    for sd in (1, -1):
+        g('#8A6A44').limb((sd * 0.6, 0, 0.3), (sd * 0.6, 0, 1.5), 0.05, seg=6)
+    g('#8A6A44').limb((-0.72, 0, 1.5), (0.72, 0, 1.5), 0.045, seg=6)
+    g('#6B5240').limb((0.0, 0, 1.48), (0.0, 0, 0.85), 0.012, seg=5)
+    g('#8A6A44').cone((0, 0, 0.62), (0, 0, 0.86), 0.1, 0.13, seg=8)
+    g.done(parent=R)
+    return R

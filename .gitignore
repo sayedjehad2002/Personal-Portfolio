@@ -32,3 +32,6 @@ next-env.d.ts
 /blender/*.blend
 /blender/*.blend1
 __pycache__/
+
+# recorded walkthroughs (large; made by scripts/record-walkthrough.mjs)
+/docs/video/

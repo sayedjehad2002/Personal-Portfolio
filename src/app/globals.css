@@ -269,3 +269,19 @@ article[data-realm="magma"] {
     transform: translateY(-10px);
   }
 }
+
+/* ---------- the loading screen's sound button asks to be pressed ---------- */
+.sound-choice[data-on="0"] {
+  animation: sound-pulse 1.8s ease-out infinite;
+}
+@keyframes sound-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(255 255 255 / 0.55), 0 10px 26px -10px rgb(0 0 0 / 0.7);
+  }
+  100% {
+    box-shadow: 0 0 0 16px rgb(255 255 255 / 0), 0 10px 26px -10px rgb(0 0 0 / 0.7);
+  }
+}
+html[data-motion="off"] .sound-choice {
+  animation: none !important;
+}
